@@ -1,0 +1,2250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>SCHRÖDINGER'S CAT — A Quantum Superposition Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000;
+  --green:#39ff14;
+  --cyan:#00ffff;
+  --magenta:#ff2bd6;
+  --yellow:#ffe600;
+  --white:#fff;
+  --dim:#1a1a1a;
+  --panel:#0a0a14;
+  --red:#ff3344;
+  --tint:transparent;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Press Start 2P',monospace;-webkit-tap-highlight-color:transparent;}
+html,body{width:100%;min-height:100%;background:var(--bg);color:var(--white);overflow-x:hidden;}
+body{
+  display:flex;align-items:center;justify-content:center;
+  min-height:100vh;padding:8px;
+  background:radial-gradient(ellipse at center, #050010 0%, #000 70%);
+  image-rendering:pixelated;
+  -webkit-font-smoothing:none;
+  transition:background-color .8s;
+}
+button{font-family:inherit;cursor:pointer;}
+svg{image-rendering:pixelated;display:block;}
+
+/* Background tint layer that shifts with wave function */
+#tint-overlay{
+  position:fixed;inset:0;pointer-events:none;z-index:5;
+  background:var(--tint);
+  transition:background .6s;
+  mix-blend-mode:screen;opacity:.18;
+}
+
+#app{
+  position:relative;
+  width:100%;max-width:600px;
+  background:var(--panel);
+  border:3px solid var(--cyan);
+  box-shadow:
+    0 0 0 3px #000,
+    0 0 0 6px var(--magenta),
+    0 0 30px rgba(0,255,255,.4),
+    0 0 60px rgba(255,43,214,.25);
+  padding:14px;
+  overflow:hidden;
+  z-index:6;
+}
+#app > *:not(#bg-particles):not(#crt-overlay){position:relative;z-index:2;}
+
+/* CRT scanlines + flicker */
+#crt-overlay{
+  position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:
+    repeating-linear-gradient(to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.25) 3px,
+      rgba(0,0,0,.25) 4px);
+  mix-blend-mode:multiply;
+  animation:crtFlicker 5s infinite;
+}
+#crt-overlay::after{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.65) 100%);
+}
+@keyframes crtFlicker{
+  0%,100%{opacity:.85;}47%{opacity:.85;}48%{opacity:.65;}
+  49%{opacity:.9;}50%{opacity:.7;}51%{opacity:.85;}
+}
+
+/* Floating background dots */
+#bg-particles{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden;}
+.bg-dot{position:absolute;width:3px;height:3px;background:var(--cyan);opacity:.4;animation:bgFloat linear infinite;}
+.bg-dot.m{background:var(--magenta);}
+.bg-dot.y{background:var(--yellow);}
+@keyframes bgFloat{
+  0%{transform:translateY(0) translateX(0);opacity:0;}
+  10%{opacity:.6;}90%{opacity:.6;}
+  100%{transform:translateY(-120vh) translateX(var(--drift,20px));opacity:0;}
+}
+
+/* Chrome bar */
+.chrome-bar{
+  display:flex;justify-content:space-between;align-items:center;
+  background:#000;border:2px solid var(--green);
+  padding:6px 8px;font-size:7px;color:var(--green);
+  margin-bottom:10px;letter-spacing:1px;
+}
+.chrome-bar .led{
+  display:inline-block;width:8px;height:8px;background:var(--red);
+  box-shadow:0 0 6px var(--red);margin-right:6px;
+  animation:blink 1.2s infinite;
+}
+@keyframes blink{50%{opacity:.3;}}
+.chrome-bar .lvl{color:var(--cyan);}
+
+/* Stat bar */
+.stat-bar{
+  display:grid;grid-template-columns:repeat(5,1fr);gap:4px;
+  margin-bottom:6px;font-size:7px;
+}
+.stat{background:#000;border:2px solid var(--cyan);padding:5px 2px;text-align:center;color:var(--cyan);}
+.stat .label{color:var(--white);opacity:.7;display:block;margin-bottom:3px;font-size:5px;letter-spacing:0;}
+.stat .val{color:var(--yellow);font-size:10px;}
+.stat.wins{border-color:var(--green);}
+.stat.wins .label{color:var(--green);opacity:1;}
+.stat.wins .val{color:var(--green);}
+.stat.losses{border-color:var(--red);}
+.stat.losses .label{color:var(--red);opacity:1;}
+.stat.losses .val{color:var(--red);}
+.stat.streak{border-color:var(--magenta);}
+.stat.streak .val{color:var(--magenta);}
+.stat.high .val{color:var(--green);}
+.stat.score-pop .val{animation:scorePop .45s ease-out;color:var(--green);}
+@keyframes scorePop{
+  0%{transform:scale(1);}
+  35%{transform:scale(1.6);text-shadow:0 0 14px var(--green);color:var(--white);}
+  100%{transform:scale(1);text-shadow:none;}
+}
+.stat.score-loss .val{animation:scoreLoss .45s ease-out;color:var(--red);}
+@keyframes scoreLoss{
+  0%{transform:scale(1);}
+  35%{transform:scale(1.3) translateX(-3px);color:var(--red);}
+  60%{transform:scale(1.3) translateX(3px);}
+  100%{transform:scale(1);}
+}
+
+/* Level progress bar */
+.progress-bar{
+  position:relative;height:14px;background:#000;border:2px solid var(--cyan);
+  margin-bottom:10px;overflow:hidden;
+}
+.progress-fill{
+  height:100%;width:0%;
+  background:linear-gradient(to right, var(--magenta), var(--cyan), var(--green));
+  transition:width .5s cubic-bezier(.4,1.5,.5,1);
+  box-shadow:0 0 10px var(--cyan);
+}
+.progress-label{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:7px;color:var(--white);text-shadow:1px 1px 0 #000;letter-spacing:1px;
+}
+
+/* Screens */
+.screen{display:none;}
+.screen.active{display:block;}
+
+/* TITLE SCREEN */
+#title-screen{text-align:center;padding:14px 6px;}
+#title-screen h1{
+  font-size:clamp(18px,5vw,28px);
+  color:var(--cyan);
+  text-shadow:3px 3px 0 var(--magenta),6px 6px 0 #000;
+  line-height:1.3;margin:18px 0 8px;letter-spacing:1px;
+}
+#title-screen .subtitle{font-size:9px;color:var(--yellow);margin-bottom:24px;letter-spacing:1px;}
+#title-screen .press-start{font-size:12px;color:var(--green);margin:18px 0;animation:flicker 1s infinite;}
+@keyframes flicker{0%,49%,100%{opacity:1;}50%,99%{opacity:.2;}}
+#title-screen .howto{
+  font-size:8px;color:var(--white);line-height:1.7;
+  background:#000;border:2px dashed var(--magenta);
+  padding:10px;margin:14px auto;max-width:480px;
+}
+#title-screen .high-score-hint{font-size:8px;color:var(--green);margin:12px 0;min-height:12px;}
+#title-screen .fact{
+  font-size:7px;color:var(--cyan);
+  background:#000;border:1px solid var(--cyan);
+  padding:8px;margin:14px auto;max-width:480px;
+  line-height:1.7;min-height:48px;
+  display:flex;align-items:center;justify-content:center;
+}
+#title-screen .fact .tag{color:var(--magenta);margin-right:6px;}
+.title-buttons{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:18px;}
+.tiny-btn{
+  appearance:none;background:#000;color:var(--cyan);border:2px solid var(--cyan);
+  padding:8px 10px;font-size:7px;letter-spacing:1px;
+}
+.tiny-btn:hover{background:var(--cyan);color:#000;}
+.tiny-btn.gold{color:var(--yellow);border-color:var(--yellow);}
+.tiny-btn.gold:hover{background:var(--yellow);color:#000;}
+
+/* BRIEFING */
+#briefing-screen{padding:14px 8px;text-align:center;}
+.briefing-header{font-size:12px;color:var(--magenta);text-shadow:2px 2px 0 #000;margin:6px 0 18px;letter-spacing:2px;animation:flicker 2.5s infinite;}
+.briefing-body{
+  text-align:left;font-size:8px;color:var(--white);line-height:1.9;
+  background:#000;border:2px solid var(--cyan);
+  padding:14px 12px;margin:0 auto 18px;max-width:480px;
+}
+.briefing-body p{margin-bottom:10px;}
+.briefing-body p.challenge{
+  text-align:center;color:var(--cyan);font-size:9px;line-height:1.7;
+  border-top:1px dashed var(--magenta);padding-top:10px;margin-top:14px;margin-bottom:0;
+}
+.briefing-btn{width:100%;max-width:480px;margin:0 auto;display:block;}
+
+/* GAME LAYOUT — game body splits into sidebar (toolkit) + main stage */
+#game-screen{position:relative;}
+.game-grid{display:grid;grid-template-columns:90px 1fr;gap:8px;}
+.toolkit{
+  display:flex;flex-direction:column;gap:6px;
+  background:#000;border:2px solid var(--cyan);padding:6px;
+  font-size:6px;
+}
+.toolkit-title{color:var(--cyan);text-align:center;font-size:6px;margin-bottom:4px;letter-spacing:1px;}
+.gate{
+  position:relative;
+  background:#0a0a14;border:2px solid #333;color:#666;
+  padding:6px 4px;text-align:center;font-size:6px;
+  cursor:not-allowed;transition:transform .1s, border-color .2s, color .2s, background .2s;
+}
+.gate.unlocked{border-color:var(--magenta);color:var(--magenta);cursor:pointer;background:#000;}
+.gate.unlocked:hover{background:var(--magenta);color:#000;transform:scale(1.05);}
+.gate.armed{background:var(--magenta);color:#000;animation:gateArmed .8s infinite alternate;}
+.gate.used{opacity:.3;cursor:not-allowed;}
+@keyframes gateArmed{from{box-shadow:0 0 0 var(--magenta);}to{box-shadow:0 0 12px var(--magenta);}}
+.gate .glyph{font-size:14px;display:block;margin:2px 0;color:inherit;}
+.gate .name{display:block;color:inherit;}
+.gate .lock{font-size:6px;color:#555;display:block;margin-top:2px;}
+.gate .tip{
+  position:absolute;left:100%;top:0;margin-left:6px;
+  background:#000;border:2px solid var(--magenta);padding:6px;
+  width:200px;font-size:7px;color:var(--white);line-height:1.5;
+  display:none;z-index:80;text-align:left;
+}
+.gate:hover .tip{display:block;}
+
+/* GAME STAGE */
+.game-stage{
+  position:relative;background:#000;
+  border:2px solid var(--magenta);
+  padding:14px 10px 18px;min-height:440px;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+  overflow:hidden;
+}
+.psi-label{
+  font-size:8px;color:var(--cyan);margin-bottom:10px;
+  text-shadow:0 0 6px var(--cyan);letter-spacing:1px;text-align:center;
+  animation:psiPulse 1.8s ease-in-out infinite;line-height:1.5;
+}
+@keyframes psiPulse{0%,100%{opacity:.7;text-shadow:0 0 4px var(--cyan);}50%{opacity:1;text-shadow:0 0 14px var(--cyan), 0 0 4px var(--white);}}
+.psi-label.collapsed{color:var(--yellow);text-shadow:0 0 6px var(--yellow);animation:none;}
+.bias-readout{
+  font-size:7px;color:var(--yellow);margin-bottom:4px;min-height:10px;letter-spacing:1px;
+}
+/* Plain-English cue legend (visible at L2+) */
+.cue-legend{
+  display:none;
+  font-size:6px;color:var(--white);
+  background:#000;border:1px solid var(--cyan);
+  padding:4px 6px;margin:4px 0 8px;line-height:1.7;
+  max-width:380px;
+}
+.cue-legend.show{display:block;}
+.cue-legend b{color:var(--cyan);}
+.cue-legend .g{color:var(--green);}
+.cue-legend .m{color:var(--magenta);}
+.cue-legend .y{color:var(--yellow);}
+/* Tutorial floating tip pointing at the box */
+.tut-tip{
+  position:absolute;background:#000;border:2px solid var(--yellow);color:var(--yellow);
+  padding:6px 8px;font-size:7px;line-height:1.5;max-width:170px;z-index:70;
+  box-shadow:0 0 10px var(--yellow);
+  animation:tipBounce 1.6s ease-in-out infinite;
+}
+@keyframes tipBounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-3px);}}
+.tut-tip::before{content:"";position:absolute;width:0;height:0;}
+.tut-tip.left{left:8px;top:30%;}
+.tut-tip.left::before{border:6px solid transparent;border-right-color:var(--yellow);left:-14px;top:50%;margin-top:-6px;}
+.tut-tip.right{right:8px;top:30%;}
+.tut-tip.right::before{border:6px solid transparent;border-left-color:var(--yellow);right:-14px;top:50%;margin-top:-6px;}
+.tut-tip.below{left:50%;transform:translateX(-50%);bottom:8px;}
+
+/* Boxes */
+.boxes-row{display:flex;gap:24px;align-items:flex-end;justify-content:center;margin-top:auto;}
+.box-area{position:relative;width:160px;height:170px;display:flex;align-items:flex-end;justify-content:center;}
+.atom{position:absolute;top:-6px;left:-22px;width:28px;height:28px;animation:atomPulse 1.6s infinite, atomSpin var(--spin,4s) linear infinite;}
+@keyframes atomSpin{to{transform:rotate(360deg);}}
+@keyframes atomPulse{
+  0%,100%{filter:drop-shadow(0 0 4px var(--green));}
+  50%{filter:drop-shadow(0 0 10px var(--green));}
+}
+.geiger{position:absolute;top:-6px;right:-22px;width:28px;height:36px;}
+.geiger .spark{
+  position:absolute;width:4px;height:4px;background:var(--yellow);
+  top:6px;left:9px;border-radius:50%;
+  box-shadow:0 0 6px var(--yellow);opacity:0;
+}
+.geiger.tick .spark{animation:sparkPop .15s;}
+@keyframes sparkPop{0%{opacity:0;transform:scale(.5);}40%{opacity:1;transform:scale(1.4);}100%{opacity:0;transform:scale(.8);}}
+.box-wrap{position:relative;width:140px;height:140px;animation:bob 2.4s ease-in-out infinite;}
+@keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+.box-wrap::before{
+  content:"";position:absolute;inset:-20px;
+  background:radial-gradient(circle, var(--glow,rgba(0,255,255,.18)) 0%, transparent 65%);
+  animation:auraPulse 2s ease-in-out infinite;z-index:0;pointer-events:none;
+}
+@keyframes auraPulse{0%,100%{transform:scale(.9);opacity:.6;}50%{transform:scale(1.15);opacity:1;}}
+.box-wrap.shake-box{animation:boxShake .55s cubic-bezier(.36,.07,.19,.97);}
+@keyframes boxShake{
+  0%,100%{transform:translate(0,0) rotate(0);}
+  10%{transform:translate(-4px,-2px) rotate(-3deg);}20%{transform:translate(5px,2px) rotate(4deg);}
+  30%{transform:translate(-5px,1px) rotate(-3deg);}40%{transform:translate(4px,-2px) rotate(3deg);}
+  55%{transform:translate(-3px,2px) rotate(-2deg);}70%{transform:translate(2px,-1px) rotate(1deg);}
+  85%{transform:translate(-1px,1px) rotate(-1deg);}
+}
+.box-wrap.box-shrink{animation:boxShrinkPulse 2.6s cubic-bezier(.4,0,.2,1) forwards;}
+@keyframes boxShrinkPulse{
+  0%{transform:scale(1);}10%{transform:scale(.55);}70%{transform:scale(.55);}
+  82%{transform:scale(1.25);}92%{transform:scale(.95);}100%{transform:scale(1);}
+}
+.box-lid{position:absolute;top:0;left:0;width:140px;height:34px;transition:transform .5s cubic-bezier(.5,-0.4,.5,1.4);z-index:3;}
+.box-lid.open{transform:translateY(-46px) rotate(-8deg);}
+.box-body{position:absolute;bottom:0;left:0;width:140px;height:106px;z-index:2;}
+.cat-slot{position:absolute;left:50%;top:34px;transform:translateX(-50%);width:80px;height:80px;z-index:1;}
+.cat-sprite{position:absolute;inset:0;width:100%;height:100%;transition:opacity .3s;}
+.cat-sprite.hidden{opacity:0;}
+.cat-sprite.flicker{animation:superFlicker .18s infinite;}
+@keyframes superFlicker{
+  0%,100%{opacity:.55;transform:translateX(0);}
+  25%{opacity:.85;transform:translateX(-1px);}
+  50%{opacity:.4;transform:translateX(1px);}
+  75%{opacity:.7;transform:translateX(0);}
+}
+.cat-sprite.tail-wag .tail{transform-origin:50% 80%;animation:wag .5s infinite alternate;}
+@keyframes wag{from{transform:rotate(-12deg);}to{transform:rotate(12deg);}}
+.cat-sprite.zzz::after{
+  content:"Z";position:absolute;top:0;right:-10px;
+  color:var(--cyan);font-size:10px;animation:zzz 1.2s infinite;
+}
+@keyframes zzz{0%{opacity:0;transform:translateY(0);}50%{opacity:1;}100%{opacity:0;transform:translateY(-12px);}}
+
+/* Falling cat */
+.falling-cat{
+  position:absolute;left:50%;bottom:80px;width:130px;height:130px;
+  z-index:60;pointer-events:none;
+  filter:drop-shadow(0 0 4px var(--white)) drop-shadow(0 0 14px var(--yellow)) drop-shadow(0 0 28px var(--magenta));
+  animation:catFall 2.2s cubic-bezier(.4,1.5,.55,1) forwards;
+}
+.falling-cat svg{width:100%;height:100%;display:block;}
+@keyframes catFall{
+  0%  {transform:translate(-50%,-360px) scale(.5)  rotate(-45deg); opacity:0;}
+  6%  {opacity:1;}
+  20% {transform:translate(-50%,-300px) scale(1.0) rotate(-30deg); opacity:1;}
+  45% {transform:translate(-50%,-200px) scale(1.6) rotate(-15deg); opacity:1;}
+  70% {transform:translate(-50%,-60px)  scale(2.4) rotate(5deg);   opacity:1;}
+  82% {transform:translate(-50%,10px)   scale(2.0) rotate(-4deg);  opacity:1;}
+  90% {transform:translate(-50%,0)      scale(1.2) rotate(2deg);   opacity:1;}
+  100%{transform:translate(-50%,5px)    scale(0)   rotate(0);      opacity:0;}
+}
+.drop-beam{
+  position:absolute;left:50%;bottom:80px;transform:translateX(-50%);
+  width:140px;height:380px;
+  background:linear-gradient(to bottom,
+    rgba(255,230,0,0) 0%, rgba(0,255,255,.18) 30%,
+    rgba(255,230,0,.30) 70%, rgba(255,43,214,.18) 100%);
+  clip-path:polygon(35% 0, 65% 0, 90% 100%, 10% 100%);
+  z-index:8;pointer-events:none;mix-blend-mode:screen;
+  animation:beamFlicker 2.2s ease-out forwards;
+}
+@keyframes beamFlicker{0%{opacity:0;}10%{opacity:.9;}60%{opacity:.7;}85%{opacity:.95;}100%{opacity:0;}}
+.impact-flash-stage{
+  position:absolute;left:50%;bottom:80px;transform:translate(-50%,40%);
+  width:220px;height:220px;border-radius:50%;
+  background:radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,230,0,.7) 25%, rgba(255,43,214,.4) 55%, transparent 75%);
+  z-index:55;pointer-events:none;mix-blend-mode:screen;
+  animation:impactStage .55s ease-out forwards;
+}
+@keyframes impactStage{
+  0%{transform:translate(-50%,40%) scale(.2);opacity:0;}
+  20%{transform:translate(-50%,40%) scale(1);opacity:1;}
+  100%{transform:translate(-50%,40%) scale(1.8);opacity:0;}
+}
+
+/* Buttons */
+.choice-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+.choice-row.three{grid-template-columns:1fr 1fr 1fr;}
+.choice-btn{
+  appearance:none;border:none;outline:none;background:#000;color:var(--white);
+  font-size:13px;padding:14px 6px;letter-spacing:2px;position:relative;
+  transition:transform .08s, filter .08s;
+}
+.choice-btn.alive{color:var(--green);box-shadow:0 0 0 3px var(--green),0 6px 0 0 #0a4d00,0 0 18px rgba(57,255,20,.5);}
+.choice-btn.dead{color:var(--magenta);box-shadow:0 0 0 3px var(--magenta),0 6px 0 0 #4d0033,0 0 18px rgba(255,43,214,.5);}
+.choice-btn.asleep{color:var(--cyan);box-shadow:0 0 0 3px var(--cyan),0 6px 0 0 #003a4d,0 0 18px rgba(0,255,255,.5);}
+.choice-btn:hover{filter:brightness(1.3);}
+.choice-btn:active{transform:translateY(4px);}
+.choice-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* Stake chips */
+.stake-row{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:10px;font-size:7px;color:var(--cyan);flex-wrap:wrap;}
+.stake-label{margin-right:4px;color:var(--white);opacity:.7;}
+.chip{
+  appearance:none;background:#000;color:var(--cyan);border:2px solid var(--cyan);
+  padding:6px 9px;font-size:8px;letter-spacing:1px;
+}
+.chip.active{background:var(--cyan);color:#000;box-shadow:0 0 10px var(--cyan);}
+.chip:hover{filter:brightness(1.2);}
+.chip:disabled{opacity:.4;cursor:not-allowed;}
+
+/* Decoherence timer */
+.timer-wrap{margin:8px 0 6px;height:14px;background:#000;border:2px solid var(--yellow);position:relative;display:none;}
+.timer-wrap.active{display:block;}
+.timer-fill{height:100%;background:var(--yellow);width:100%;transition:width .1s linear;box-shadow:0 0 8px var(--yellow) inset;}
+.timer-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:7px;color:#000;mix-blend-mode:difference;}
+
+.bottom-controls{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:7px;color:var(--cyan);}
+.mute-btn{appearance:none;background:#000;color:var(--cyan);border:2px solid var(--cyan);padding:6px 8px;font-size:8px;}
+.mute-btn:hover{background:var(--cyan);color:#000;}
+
+footer{text-align:center;font-size:6px;color:#555;margin-top:10px;line-height:1.6;}
+
+/* Result overlay */
+#result-overlay{
+  position:absolute;inset:0;display:none;background:rgba(0,0,0,.85);
+  align-items:center;justify-content:center;flex-direction:column;
+  z-index:50;text-align:center;padding:20px;
+}
+#result-overlay.active{display:flex;}
+#result-overlay .verdict{font-size:clamp(20px,6vw,32px);margin-bottom:14px;letter-spacing:2px;text-shadow:4px 4px 0 #000;}
+#result-overlay.win .verdict{color:var(--green);animation:popIn .3s;}
+#result-overlay.lose .verdict{color:var(--red);animation:popIn .3s;}
+@keyframes popIn{from{transform:scale(.3);opacity:0;}to{transform:scale(1);opacity:1;}}
+#result-overlay .points{font-size:14px;color:var(--yellow);margin-bottom:10px;}
+#result-overlay .collapse-msg{font-size:9px;color:var(--cyan);}
+#result-overlay .collapse-msg b{color:var(--magenta);}
+#result-overlay .flip-btn{
+  margin-top:14px;appearance:none;background:#000;color:var(--magenta);
+  border:2px solid var(--magenta);padding:8px 14px;font-size:9px;letter-spacing:1px;
+  animation:gateArmed .6s infinite alternate;
+}
+
+/* Combo overlay */
+#combo-overlay{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  z-index:90;pointer-events:none;
+}
+#combo-overlay.active{display:flex;animation:comboShow 1.2s forwards;}
+@keyframes comboShow{0%{opacity:0;}10%{opacity:1;}80%{opacity:1;}100%{opacity:0;}}
+#combo-overlay .combo-text{
+  font-size:clamp(28px,9vw,52px);
+  color:var(--yellow);
+  text-shadow:4px 4px 0 var(--magenta), 8px 8px 0 #000;
+  animation:comboBounce .6s;
+  letter-spacing:3px;
+}
+@keyframes comboBounce{0%{transform:scale(.2) rotate(-15deg);}60%{transform:scale(1.3) rotate(5deg);}100%{transform:scale(1) rotate(0);}}
+
+/* Level splash */
+#level-splash{
+  position:absolute;inset:0;display:none;background:rgba(0,0,0,.95);
+  align-items:center;justify-content:center;flex-direction:column;
+  z-index:95;text-align:center;padding:20px;
+}
+#level-splash.active{display:flex;animation:fadeIn .4s;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+#level-splash .lvl-num{font-size:14px;color:var(--cyan);margin-bottom:6px;letter-spacing:2px;}
+#level-splash .lvl-name{
+  font-size:clamp(16px,5vw,24px);color:var(--magenta);
+  text-shadow:3px 3px 0 #000;margin-bottom:14px;letter-spacing:2px;
+  animation:flicker 1.5s infinite;
+}
+#level-splash .lvl-desc{
+  font-size:8px;color:var(--white);max-width:440px;line-height:1.8;
+  background:#000;border:2px solid var(--cyan);padding:12px;margin-bottom:14px;
+}
+#level-splash .lvl-go{
+  appearance:none;background:#000;color:var(--green);border:2px solid var(--green);
+  padding:10px 18px;font-size:10px;letter-spacing:2px;
+}
+
+/* Achievement toast */
+#ach-toast{
+  position:fixed;top:20px;right:20px;z-index:1000;
+  background:#000;border:3px solid var(--yellow);
+  padding:10px 14px;display:none;max-width:280px;
+  box-shadow:0 0 20px var(--yellow);
+}
+#ach-toast.active{display:block;animation:achPop .5s;}
+@keyframes achPop{from{transform:translateX(120%);}to{transform:translateX(0);}}
+#ach-toast .ach-tag{color:var(--yellow);font-size:7px;letter-spacing:2px;margin-bottom:6px;}
+#ach-toast .ach-name{color:var(--cyan);font-size:9px;margin-bottom:4px;}
+#ach-toast .ach-desc{color:var(--white);font-size:7px;line-height:1.5;}
+
+/* Stats screen */
+#stats-screen{padding:14px;text-align:center;}
+.stats-title{font-size:14px;color:var(--cyan);margin-bottom:14px;letter-spacing:2px;}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:7px;margin-bottom:14px;text-align:left;}
+.stats-grid .stat-row{background:#000;border:2px solid var(--cyan);padding:6px;}
+.stats-grid .stat-row .lbl{color:var(--white);opacity:.7;display:block;margin-bottom:3px;font-size:6px;}
+.stats-grid .stat-row .v{color:var(--yellow);font-size:10px;}
+.ach-list{font-size:7px;text-align:left;background:#000;border:2px solid var(--magenta);padding:8px;margin-bottom:12px;line-height:1.7;}
+.ach-list .ach-item.unlocked{color:var(--green);}
+.ach-list .ach-item.locked{color:#555;}
+
+/* Skin selector */
+.skin-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:12px auto;max-width:480px;}
+.skin{
+  background:#000;border:2px solid #333;padding:6px;
+  cursor:pointer;text-align:center;font-size:6px;color:#555;
+  transition:transform .1s, border-color .2s;
+}
+.skin.unlocked{border-color:var(--cyan);color:var(--cyan);}
+.skin.unlocked:hover{transform:scale(1.1);}
+.skin.active{background:var(--cyan);color:#000;}
+.skin .preview{width:40px;height:40px;margin:0 auto 4px;}
+
+/* Glitch overlay */
+#glitch{
+  position:absolute;inset:0;pointer-events:none;z-index:40;display:none;
+  background:repeating-linear-gradient(0deg, rgba(255,43,214,.15) 0 2px, transparent 2px 4px, rgba(0,255,255,.15) 4px 6px, transparent 6px 8px);
+  mix-blend-mode:screen;animation:glitchSlide .3s steps(6) 1;
+}
+#glitch.active{display:block;}
+@keyframes glitchSlide{
+  0%{transform:translate(0,0);opacity:1;}20%{transform:translate(-6px,3px);opacity:.7;}
+  40%{transform:translate(5px,-4px);opacity:1;}60%{transform:translate(-3px,2px);opacity:.5;}
+  80%{transform:translate(4px,-2px);opacity:1;}100%{transform:translate(0,0);opacity:0;}
+}
+
+/* Particles */
+.particle{position:absolute;width:6px;height:6px;pointer-events:none;z-index:30;animation:partFly .8s ease-out forwards;}
+@keyframes partFly{to{transform:translate(var(--dx), var(--dy)) scale(.2);opacity:0;}}
+
+/* Streak flame */
+.flame{display:inline-block;font-size:9px;}
+.flame.on{color:var(--magenta);text-shadow:0 0 6px var(--magenta);animation:flameFlick .25s infinite alternate;}
+@keyframes flameFlick{from{transform:scale(1);}to{transform:scale(1.15);}}
+
+/* Many-Worlds boss */
+.many-worlds-row{display:flex;gap:8px;justify-content:center;margin:12px 0;flex-wrap:wrap;}
+.mini-box{width:60px;height:60px;border:2px solid var(--yellow);background:#222;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.mw-input{display:flex;justify-content:center;align-items:center;gap:8px;font-size:8px;color:var(--cyan);margin-top:8px;}
+.mw-input input{
+  width:50px;background:#000;color:var(--yellow);border:2px solid var(--yellow);
+  font-family:inherit;font-size:14px;text-align:center;padding:4px;
+}
+
+/* Shake */
+.shake{animation:shake .4s;}
+@keyframes shake{
+  0%,100%{transform:translate(0,0);}10%{transform:translate(-6px,4px);}
+  20%{transform:translate(6px,-4px);}30%{transform:translate(-5px,-3px);}
+  40%{transform:translate(5px,3px);}50%{transform:translate(-3px,2px);}
+  60%{transform:translate(3px,-2px);}70%{transform:translate(-2px,1px);}
+  80%{transform:translate(2px,-1px);}90%{transform:translate(-1px,1px);}
+}
+
+/* Daily share */
+.share-box{
+  background:#000;border:2px solid var(--green);padding:10px;
+  font-size:8px;color:var(--green);margin:10px auto;max-width:480px;
+  word-break:break-all;line-height:1.6;
+}
+
+@media (max-width:540px){
+  #app{padding:8px;border-width:3px;}
+  .game-grid{grid-template-columns:70px 1fr;gap:5px;}
+  .toolkit{padding:4px;font-size:5px;}
+  .gate{padding:4px 2px;font-size:5px;}
+  .gate .glyph{font-size:11px;}
+  .gate .tip{display:none !important;}
+  .stat .val{font-size:9px;}
+  .stat.mult .val{font-size:10px;}
+  .choice-btn{font-size:11px;padding:12px 4px;}
+  .game-stage{min-height:380px;padding:10px 6px 14px;}
+  .box-area{width:130px;height:150px;}
+  .box-wrap{width:110px;height:110px;}
+  .box-lid{width:110px;}.box-body{width:110px;height:80px;}
+  .cat-slot{width:60px;height:60px;}
+  .atom,.geiger{display:none;}
+  .boxes-row{gap:14px;}
+}
+</style>
+</head>
+<body>
+<div id="tint-overlay"></div>
+<div id="app">
+  <div class="chrome-bar">
+    <span><span class="led"></span>QUANTUM ARCADE</span>
+    <span class="lvl" id="chrome-level">LV 1</span>
+  </div>
+  <div id="bg-particles"></div>
+
+  <!-- TITLE -->
+  <div id="title-screen" class="screen active">
+    <h1>SCHRÖDINGER'S<br>CAT</h1>
+    <div class="subtitle">A QUANTUM SUPERPOSITION GAME</div>
+    <div class="howto">
+      ALIVE OR DEAD?<br>
+      <span style="color:var(--cyan);font-size:7px;">— BEFORE YOU LOOK —</span>
+    </div>
+    <div class="press-start">&gt; PRESS START &lt;</div>
+    <div class="high-score-hint" id="title-high"></div>
+    <div class="fact" id="fact-box"><span><span class="tag">ψ</span><span id="fact-text">Loading...</span></span></div>
+    <div class="title-buttons">
+      <button class="tiny-btn gold" id="btn-daily">DAILY CHALLENGE</button>
+      <button class="tiny-btn" id="btn-stats">STATS</button>
+      <button class="tiny-btn" id="btn-skins">CAT SKINS</button>
+    </div>
+  </div>
+
+  <!-- BRIEFING -->
+  <div id="briefing-screen" class="screen">
+    <div class="briefing-header">// THE EXPERIMENT //</div>
+    <div class="briefing-body">
+      <p><b style="color:var(--cyan)">THE PUZZLE:</b> A cat is sealed in a box with a 50/50 quantum trigger. Until you peek, the cat is <b style="color:var(--green)">ALIVE</b> AND <b style="color:var(--magenta)">DEAD</b> at the same time. Looking forces the universe to pick one.</p>
+      <p><b style="color:var(--cyan)">YOUR JOB:</b> Guess <b style="color:var(--green)">ALIVE</b> or <b style="color:var(--magenta)">DEAD</b> before the box opens. Every right guess banks points. Strings of right guesses unlock power-ups.</p>
+      <p><b style="color:var(--cyan)">THE TWIST:</b> Soon the box gives you hints (clicks, glows, spins). Learn to read them and you'll out-guess randomness itself.</p>
+      <p class="challenge">NO PHYSICS DEGREE REQUIRED.<br><span style="color:var(--yellow)">JUST TRUST YOUR GUT.</span></p>
+    </div>
+    <button class="choice-btn alive briefing-btn" id="btn-begin">BEGIN EXPERIMENT</button>
+  </div>
+
+  <!-- STATS -->
+  <div id="stats-screen" class="screen">
+    <div class="stats-title">// LAB RECORDS //</div>
+    <div class="stats-grid" id="stats-grid"></div>
+    <div class="stats-title" style="font-size:10px;">ACHIEVEMENTS</div>
+    <div class="ach-list" id="ach-list"></div>
+    <button class="tiny-btn" id="btn-stats-back">&lt; BACK</button>
+  </div>
+
+  <!-- SKINS -->
+  <div id="skins-screen" class="screen">
+    <div class="stats-title">// CAT SKINS //</div>
+    <div style="font-size:7px;color:var(--cyan);margin-bottom:8px;">UNLOCK BY SCORING POINTS</div>
+    <div class="skin-grid" id="skin-grid"></div>
+    <button class="tiny-btn" id="btn-skins-back">&lt; BACK</button>
+  </div>
+
+  <!-- GAME -->
+  <div id="game-screen" class="screen">
+    <div class="stat-bar">
+      <div class="stat"><span class="label">SCORE</span><span class="val" id="score-val">0</span></div>
+      <div class="stat wins"><span class="label">✓ RIGHT</span><span class="val" id="wins-val">0</span></div>
+      <div class="stat losses"><span class="label">✗ WRONG</span><span class="val" id="losses-val">0</span></div>
+      <div class="stat streak"><span class="label">STREAK</span><span class="val" id="streak-val"><span class="flame" id="flame">★</span> 0</span></div>
+      <div class="stat high"><span class="label">HI</span><span class="val" id="high-val">0</span></div>
+    </div>
+    <div class="progress-bar" id="level-progress">
+      <div class="progress-fill" id="progress-fill"></div>
+      <span class="progress-label" id="progress-label">LV1 → LV2</span>
+    </div>
+
+    <div class="game-grid">
+      <div class="toolkit" id="toolkit">
+        <div class="toolkit-title">TOOLKIT</div>
+        <div class="gate" id="gate-h" data-gate="H">
+          <span class="glyph">H</span><span class="name">HADAMARD</span>
+          <span class="lock">STREAK 3</span>
+          <div class="tip"><b>HADAMARD</b><br>Resets bias to exact 50/50.<br><i style="color:var(--cyan)">Real QC: puts a qubit into equal superposition.</i></div>
+        </div>
+        <div class="gate" id="gate-x" data-gate="X">
+          <span class="glyph">X</span><span class="name">PAULI-X</span>
+          <span class="lock">STREAK 5</span>
+          <div class="tip"><b>PAULI-X</b><br>Flip the result once after observing.<br><i style="color:var(--cyan)">Real QC: quantum NOT — flips |0⟩ ↔ |1⟩.</i></div>
+        </div>
+        <div class="gate" id="gate-m" data-gate="M">
+          <span class="glyph">◉</span><span class="name">PROBE</span>
+          <span class="lock">STREAK 7</span>
+          <div class="tip"><b>MEASUREMENT PROBE</b><br>Reveals α as a percentage. Forfeits streak bonus this round.<br><i style="color:var(--cyan)">Real QC: partial measurement gives info but disturbs the state.</i></div>
+        </div>
+        <div class="gate" id="gate-c" data-gate="C">
+          <span class="glyph">⊕</span><span class="name">CNOT</span>
+          <span class="lock">STREAK 10</span>
+          <div class="tip"><b>CNOT GATE</b><br>Flips entanglement type (Φ+ ↔ Ψ+) in entangled rounds.<br><i style="color:var(--cyan)">Real QC: foundational two-qubit gate.</i></div>
+        </div>
+      </div>
+
+      <div class="game-stage" id="stage">
+        <div class="psi-label" id="psi-label">ψ = α|ALIVE⟩ + β|DEAD⟩</div>
+        <div class="bias-readout" id="bias-readout"></div>
+        <div class="cue-legend" id="cue-legend">
+          <b>READ THE CUES:</b><br>
+          <span class="y">⚛ ATOM</span> spins fast = high decay → <span class="m">DEAD</span><br>
+          <span class="y">📟 GEIGER</span> ticks fast = high decay → <span class="m">DEAD</span><br>
+          <span class="y">💡 GLOW</span> <span class="g">green</span> = ALIVE · <span class="m">magenta</span> = DEAD
+        </div>
+        <div class="boxes-row" id="boxes-row">
+          <!-- Primary box -->
+          <div class="box-area" id="box-area-1">
+            <svg class="atom" viewBox="0 0 16 16">
+              <circle cx="8" cy="8" r="1.5" fill="#39ff14"/>
+              <ellipse cx="8" cy="8" rx="7" ry="3" stroke="#39ff14" stroke-width=".7" fill="none"/>
+              <ellipse cx="8" cy="8" rx="7" ry="3" stroke="#00ffff" stroke-width=".7" fill="none" transform="rotate(60 8 8)"/>
+              <ellipse cx="8" cy="8" rx="7" ry="3" stroke="#ff2bd6" stroke-width=".7" fill="none" transform="rotate(120 8 8)"/>
+            </svg>
+            <svg class="geiger" viewBox="0 0 16 20">
+              <rect x="2" y="2" width="12" height="14" fill="#222" stroke="#ffe600" stroke-width="1"/>
+              <rect x="4" y="4" width="8" height="4" fill="#39ff14"/>
+              <rect x="5" y="10" width="2" height="2" fill="#ffe600"/>
+              <rect x="9" y="10" width="2" height="2" fill="#ffe600"/>
+              <rect x="7" y="16" width="2" height="3" fill="#888"/>
+            </svg>
+            <div class="geiger-overlay" style="position:absolute;top:-6px;right:-22px;width:28px;height:36px;pointer-events:none;">
+              <div class="spark" id="spark1" style="position:absolute;width:4px;height:4px;background:var(--yellow);top:6px;left:9px;border-radius:50%;box-shadow:0 0 6px var(--yellow);opacity:0;"></div>
+            </div>
+            <div class="box-wrap" id="box-wrap">
+              <svg class="box-body" viewBox="0 0 28 22" preserveAspectRatio="none">
+                <rect x="0" y="0" width="28" height="22" fill="#5a3a1a"/>
+                <rect x="0" y="0" width="28" height="22" fill="none" stroke="#2a1a08" stroke-width="1"/>
+                <line x1="7" y1="0" x2="7" y2="22" stroke="#3a2a10" stroke-width=".4"/>
+                <line x1="14" y1="0" x2="14" y2="22" stroke="#3a2a10" stroke-width=".4"/>
+                <line x1="21" y1="0" x2="21" y2="22" stroke="#3a2a10" stroke-width=".4"/>
+                <rect x="0" y="18" width="28" height="4" fill="#ffe600"/>
+                <g fill="#000">
+                  <polygon points="0,18 3,18 0,22"/><polygon points="3,22 6,18 9,18 6,22"/>
+                  <polygon points="9,22 12,18 15,18 12,22"/><polygon points="15,22 18,18 21,18 18,22"/>
+                  <polygon points="21,22 24,18 27,18 24,22"/><polygon points="27,22 28,21 28,22"/>
+                </g>
+                <circle cx="14" cy="9" r="3" fill="#000" stroke="#ffe600" stroke-width=".5"/>
+                <g fill="#ffe600">
+                  <circle cx="14" cy="9" r=".8"/>
+                  <path d="M14 6 L13 8 L15 8 Z"/><path d="M11.5 11 L13 9.5 L13.5 11.5 Z"/><path d="M16.5 11 L15 9.5 L14.5 11.5 Z"/>
+                </g>
+              </svg>
+              <svg class="box-lid" id="box-lid" viewBox="0 0 28 7" preserveAspectRatio="none">
+                <rect x="0" y="0" width="28" height="7" fill="#704a22"/>
+                <rect x="0" y="0" width="28" height="7" fill="none" stroke="#2a1a08" stroke-width="1"/>
+                <rect x="0" y="0" width="28" height="2" fill="#8a5a2c"/>
+                <line x1="7" y1="0" x2="7" y2="7" stroke="#3a2a10" stroke-width=".4"/>
+                <line x1="14" y1="0" x2="14" y2="7" stroke="#3a2a10" stroke-width=".4"/>
+                <line x1="21" y1="0" x2="21" y2="7" stroke="#3a2a10" stroke-width=".4"/>
+              </svg>
+              <div class="cat-slot">
+                <svg class="cat-sprite" id="cat-alive" viewBox="0 0 16 16">
+                  <rect x="3" y="9" width="10" height="5" class="catfur"/>
+                  <rect x="3" y="8" width="10" height="1" class="catfur2"/>
+                  <rect x="4" y="3" width="8" height="6" class="catfur"/>
+                  <polygon points="4,3 4,1 6,3" class="catfur"/>
+                  <polygon points="12,3 12,1 10,3" class="catfur"/>
+                  <polygon points="5,2.5 5,1.5 5.5,2.5" fill="#ff8888"/>
+                  <polygon points="11,2.5 11,1.5 10.5,2.5" fill="#ff8888"/>
+                  <rect x="5" y="5" width="2" height="2" fill="#000"/>
+                  <rect x="9" y="5" width="2" height="2" fill="#000"/>
+                  <rect x="5" y="5" width="1" height="1" fill="#39ff14"/>
+                  <rect x="9" y="5" width="1" height="1" fill="#39ff14"/>
+                  <rect x="7.5" y="7" width="1" height="1" fill="#ff2bd6"/>
+                  <rect x="6" y="8" width="4" height=".5" fill="#000"/>
+                  <line x1="2" y1="7" x2="4" y2="7" stroke="#fff" stroke-width=".3"/>
+                  <line x1="12" y1="7" x2="14" y2="7" stroke="#fff" stroke-width=".3"/>
+                  <rect x="4" y="14" width="2" height="2" class="catfur"/>
+                  <rect x="10" y="14" width="2" height="2" class="catfur"/>
+                  <g class="tail"><rect x="13" y="9" width="2" height="5" class="catfur"/></g>
+                </svg>
+                <svg class="cat-sprite hidden" id="cat-dead" viewBox="0 0 16 16">
+                  <rect x="2" y="11" width="12" height="3" fill="#888"/>
+                  <rect x="2" y="10" width="12" height="1" fill="#666"/>
+                  <rect x="2" y="7" width="6" height="4" fill="#888"/>
+                  <polygon points="2,7 2,5 4,7" fill="#888"/><polygon points="6,7 6,5 8,7" fill="#888"/>
+                  <g stroke="#000" stroke-width="0.6">
+                    <line x1="3" y1="8" x2="4.5" y2="9.5"/><line x1="4.5" y1="8" x2="3" y2="9.5"/>
+                    <line x1="5.5" y1="8" x2="7" y2="9.5"/><line x1="7" y1="8" x2="5.5" y2="9.5"/>
+                  </g>
+                  <rect x="6" y="10" width="1.5" height="1" fill="#ff2bd6"/>
+                  <rect x="9" y="8" width="1" height="3" fill="#888"/>
+                  <rect x="11" y="8" width="1" height="3" fill="#888"/>
+                  <rect x="13" y="11" width="1" height="3" fill="#888"/>
+                  <g fill="#fff" opacity=".4">
+                    <rect x="4" y="3" width="1" height="1"/><rect x="5" y="2" width="1" height="1"/><rect x="6" y="1" width="1" height="1"/>
+                  </g>
+                </svg>
+                <svg class="cat-sprite hidden" id="cat-asleep" viewBox="0 0 16 16">
+                  <rect x="3" y="9" width="10" height="5" class="catfur"/>
+                  <rect x="4" y="3" width="8" height="6" class="catfur"/>
+                  <polygon points="4,3 4,1 6,3" class="catfur"/>
+                  <polygon points="12,3 12,1 10,3" class="catfur"/>
+                  <line x1="5" y1="6" x2="7" y2="6" stroke="#000" stroke-width="0.6"/>
+                  <line x1="9" y1="6" x2="11" y2="6" stroke="#000" stroke-width="0.6"/>
+                  <rect x="7.5" y="7" width="1" height="1" fill="#ff2bd6"/>
+                  <rect x="4" y="14" width="2" height="2" class="catfur"/>
+                  <rect x="10" y="14" width="2" height="2" class="catfur"/>
+                  <g class="tail"><rect x="13" y="9" width="2" height="5" class="catfur"/></g>
+                </svg>
+              </div>
+            </div>
+          </div>
+          <!-- Secondary box (entangled rounds) -->
+          <div class="box-area" id="box-area-2" style="display:none;">
+            <svg class="atom" viewBox="0 0 16 16">
+              <circle cx="8" cy="8" r="1.5" fill="#39ff14"/>
+              <ellipse cx="8" cy="8" rx="7" ry="3" stroke="#39ff14" stroke-width=".7" fill="none"/>
+              <ellipse cx="8" cy="8" rx="7" ry="3" stroke="#00ffff" stroke-width=".7" fill="none" transform="rotate(60 8 8)"/>
+              <ellipse cx="8" cy="8" rx="7" ry="3" stroke="#ff2bd6" stroke-width=".7" fill="none" transform="rotate(120 8 8)"/>
+            </svg>
+            <div class="box-wrap" id="box-wrap-2">
+              <svg class="box-body" viewBox="0 0 28 22" preserveAspectRatio="none">
+                <rect x="0" y="0" width="28" height="22" fill="#5a3a1a"/>
+                <rect x="0" y="0" width="28" height="22" fill="none" stroke="#2a1a08" stroke-width="1"/>
+                <rect x="0" y="18" width="28" height="4" fill="#ffe600"/>
+                <circle cx="14" cy="9" r="3" fill="#000" stroke="#ffe600" stroke-width=".5"/>
+                <text x="14" y="11" font-size="5" fill="#ffe600" text-anchor="middle" font-family="monospace">2</text>
+              </svg>
+              <svg class="box-lid" id="box-lid-2" viewBox="0 0 28 7" preserveAspectRatio="none">
+                <rect x="0" y="0" width="28" height="7" fill="#704a22"/>
+                <rect x="0" y="0" width="28" height="2" fill="#8a5a2c"/>
+              </svg>
+              <div class="cat-slot">
+                <svg class="cat-sprite cat2-alive" viewBox="0 0 16 16">
+                  <rect x="3" y="9" width="10" height="5" class="catfur"/>
+                  <rect x="4" y="3" width="8" height="6" class="catfur"/>
+                  <polygon points="4,3 4,1 6,3" class="catfur"/>
+                  <polygon points="12,3 12,1 10,3" class="catfur"/>
+                  <rect x="5" y="5" width="2" height="2" fill="#000"/>
+                  <rect x="9" y="5" width="2" height="2" fill="#000"/>
+                  <rect x="5" y="5" width="1" height="1" fill="#39ff14"/>
+                  <rect x="9" y="5" width="1" height="1" fill="#39ff14"/>
+                  <rect x="7.5" y="7" width="1" height="1" fill="#ff2bd6"/>
+                  <rect x="4" y="14" width="2" height="2" class="catfur"/>
+                  <rect x="10" y="14" width="2" height="2" class="catfur"/>
+                  <rect x="13" y="9" width="2" height="5" class="catfur"/>
+                </svg>
+                <svg class="cat-sprite cat2-dead hidden" viewBox="0 0 16 16">
+                  <rect x="2" y="11" width="12" height="3" fill="#888"/>
+                  <rect x="2" y="7" width="6" height="4" fill="#888"/>
+                  <g stroke="#000" stroke-width="0.6">
+                    <line x1="3" y1="8" x2="4.5" y2="9.5"/><line x1="4.5" y1="8" x2="3" y2="9.5"/>
+                    <line x1="5.5" y1="8" x2="7" y2="9.5"/><line x1="7" y1="8" x2="5.5" y2="9.5"/>
+                  </g>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Many-Worlds boss UI -->
+        <div id="mw-area" style="display:none;">
+          <div class="many-worlds-row" id="mw-boxes"></div>
+          <div class="mw-input">
+            HOW MANY SURVIVE?
+            <input type="number" id="mw-input" min="0" max="5" value="2">
+            <button class="tiny-btn" id="mw-submit">COMMIT</button>
+          </div>
+        </div>
+
+        <div class="timer-wrap" id="timer-wrap">
+          <div class="timer-fill" id="timer-fill"></div>
+          <div class="timer-label">DECOHERENCE</div>
+        </div>
+
+        <div id="glitch"></div>
+
+        <div id="combo-overlay"><div class="combo-text" id="combo-text">x5 COMBO!</div></div>
+
+        <div id="result-overlay">
+          <div class="verdict" id="verdict-text">CORRECT!</div>
+          <div class="points" id="points-text">+100 PTS</div>
+          <div class="collapse-msg">ψ COLLAPSED TO: <b id="collapse-state">ALIVE</b></div>
+          <button class="flip-btn" id="flip-btn" style="display:none;">FLIP RESULT (X)</button>
+        </div>
+
+        <div id="level-splash">
+          <div class="lvl-num" id="lvl-num">LEVEL 2</div>
+          <div class="lvl-name" id="lvl-name">AMPLITUDE READING</div>
+          <div class="lvl-desc" id="lvl-desc">Cues now reveal the wave function's bias.</div>
+          <button class="lvl-go" id="lvl-go">CONTINUE</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="choice-row" id="choice-row">
+      <button class="choice-btn alive" id="btn-alive">ALIVE</button>
+      <button class="choice-btn dead" id="btn-dead">DEAD</button>
+      <button class="choice-btn asleep" id="btn-asleep" style="display:none;">ASLEEP</button>
+    </div>
+
+    <div class="stake-row" id="stake-row">
+      <span class="stake-label">STAKE:</span>
+      <button class="chip active" data-stake="1">1×</button>
+      <button class="chip" data-stake="2">2×</button>
+      <button class="chip" data-stake="3">3×</button>
+      <span class="stake-label" id="entangle-info" style="margin-left:auto;color:var(--magenta);"></span>
+    </div>
+
+    <div class="bottom-controls">
+      <button class="mute-btn" id="btn-mute">♪ ON</button>
+    </div>
+  </div>
+
+  <footer>
+    Inspired by Erwin Schrödinger's 1935 thought experiment.<br>
+    <span style="color:var(--cyan);">CREATED BY</span> RYAN AGNEW · SALAR KAFAEI · XIAO ZHOU
+  </footer>
+</div>
+<div id="ach-toast"><div class="ach-tag">★ ACHIEVEMENT</div><div class="ach-name" id="ach-name"></div><div class="ach-desc" id="ach-desc"></div></div>
+<div id="crt-overlay"></div>
+
+<script>
+'use strict';
+
+// ============ CONFIG & CONSTANTS ============
+const HIGH_SCORE_KEY = 'schrodinger_high_score';
+const STATS_KEY = 'schrodinger_stats';
+const ACH_KEY = 'schrodinger_achievements';
+const SKIN_KEY = 'schrodinger_skin';
+const SKINS_UNLOCKED_KEY = 'schrodinger_skins_unlocked';
+const DAILY_KEY = 'schrodinger_daily';
+
+const QUANTUM_FACTS = [
+  "A quantum particle can be in multiple states at once — until measured.",
+  "Schrödinger proposed the cat in 1935 to mock the Copenhagen interpretation.",
+  "The double-slit experiment shows particles behave as waves — when unobserved.",
+  "Quantum 'no-cloning' means an unknown quantum state cannot be perfectly copied.",
+  "Decoherence explains why we don't see superposition in everyday life.",
+  "Einstein called entanglement 'spooky action at a distance' — and was unsettled by it.",
+];
+
+const LEVELS = [
+  {n:1, name:"SUPERPOSITION 101", threshold:0,    desc:"COIN FLIPS. Just guess ALIVE or DEAD. Score 500 to unlock cues and power-ups."},
+  {n:2, name:"READ THE CUES",     threshold:500,  desc:"The box now leaks hints! Fast GEIGER clicks or fast ATOM spin → cat probably DEAD. Slow + green glow → probably ALIVE. Stakes and gates unlock."},
+  {n:3, name:"BEAT THE TIMER",    threshold:1500, desc:"A timer counts down — guess fast or the wave function decoheres on its own."},
+  {n:4, name:"ENTANGLED CATS",    threshold:3000, desc:"TWO cats linked by quantum entanglement. |Φ+⟩ = both end up the same. |Ψ+⟩ = opposite. Worth 3× points."},
+  {n:5, name:"THREE STATES",      threshold:5000, desc:"Some cats can also be ASLEEP. Three options instead of two. Welcome to QUTRITS."},
+  {n:6, name:"ENDLESS QUANTUM",   threshold:8000, desc:"Everything at once. Boss rounds, mixed types, scaling difficulty. Let's see how long you last."},
+];
+
+const ACHIEVEMENTS = {
+  first_obs:        {name:"FIRST OBSERVATION", desc:"Made your first observation."},
+  ascendant:        {name:"QUANTUM ASCENDANT", desc:"Reached Level 6."},
+  entangled_master: {name:"ENTANGLED MASTER",  desc:"Won 10 entangled rounds."},
+  uncertain_right:  {name:"UNCERTAIN BUT RIGHT",desc:"5 correct guesses at 3× stake in a row."},
+  wave_sage:        {name:"WAVE FUNCTION SAGE",desc:"Beat 10 boss rounds."},
+};
+
+const SKINS = [
+  {id:'classic', name:'CLASSIC',  unlock:0,    color:'#ffe600', dark:'#cca800'},
+  {id:'tabby',   name:'TABBY',    unlock:5000, color:'#c97a3b', dark:'#7a4a20'},
+  {id:'calico',  name:'CALICO',   unlock:10000,color:'#fff', dark:'#999'},
+  {id:'void',    name:'VOID',     unlock:15000,color:'#1a1a2a', dark:'#0a0a14'},
+  {id:'robot',   name:'ROBOT',    unlock:20000,color:'#888', dark:'#444'},
+];
+
+// ============ RNG ============
+// mulberry32 — small, fast, deterministic when seeded for daily mode
+function mulberry32(seed){
+  let s = seed >>> 0;
+  return function(){
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function dailySeed(){
+  const d = new Date();
+  const s = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+  let h = 2166136261;
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return [h >>> 0, s];
+}
+let rng = Math.random;
+
+// ============ STATE ============
+const gameState = {
+  phase: 'title',      // title|briefing|stats|skins|loading|superposition|observing|result|levelsplash
+  score: 0,
+  wins: 0,
+  losses: 0,
+  streak: 0,
+  highScore: 0,
+  level: 1,
+  currentRound: 1,
+  currentRoundType: 'standard',  // standard|entangled|qutrit|boss-mw|boss-zeno|boss-deco
+  alpha: 0.5,                    // probability of ALIVE outcome — |α|² in ψ = α|ALIVE⟩ + β|DEAD⟩
+  stake: 1,
+  daily: false,
+  dailyRoundsLeft: 0,
+  dailyRoundsTotal: 20,
+  // Power-ups
+  gates: {H:false, X:false, M:false, C:false},
+  gatesArmed: {H:false, X:false, M:false, C:false},
+  gatesUsed: {H:0, X:0, M:0, C:0},
+  // Round-specific
+  pendingFlip: false,    // X gate armed, can flip after observing
+  probeUsed: false,      // M gate used this round → forfeit streak bonus
+  entangleType: null,    // 'phi+'|'psi+'
+  entangledWins: 0,
+  bossWins: 0,
+  consecutive3xWins: 0,
+  // Misc
+  decoherenceActive: false,
+  decoherenceRaf: null,
+  decoherenceStart: 0,
+  decoherenceDuration: 5000,
+  muted: false,
+  geigerTimer: null,
+  geigerInterval: 600,
+  // Stats
+  stats: null,
+  achievements: new Set(),
+  // Cosmetic
+  skin: 'classic',
+  skinsUnlocked: ['classic'],
+};
+
+// ============ DOM ============
+const $ = (id)=>document.getElementById(id);
+const els = {};
+function cacheEls(){
+  ['title-screen','briefing-screen','stats-screen','skins-screen','game-screen',
+   'btn-begin','btn-daily','btn-stats','btn-skins','btn-stats-back','btn-skins-back',
+   'title-high','fact-text','score-val','wins-val','losses-val','streak-val','flame','high-val','chrome-level',
+   'progress-fill','progress-label','cue-legend',
+   'psi-label','bias-readout','box-lid','box-wrap','cat-alive','cat-dead','cat-asleep',
+   'box-area-2','box-wrap-2','box-lid-2','timer-wrap','timer-fill','glitch','spark1',
+   'result-overlay','verdict-text','points-text','collapse-state','flip-btn',
+   'btn-alive','btn-dead','btn-asleep','btn-mute','choice-row','stake-row','entangle-info',
+   'gate-h','gate-x','gate-m','gate-c','combo-overlay','combo-text',
+   'level-splash','lvl-num','lvl-name','lvl-desc','lvl-go',
+   'mw-area','mw-boxes','mw-input','mw-submit','stats-grid','ach-list','skin-grid',
+   'ach-toast','ach-name','ach-desc','bg-particles'].forEach(id=>{
+    els[id.replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase())] = $(id);
+  });
+  els.app = $('app'); els.stage = $('stage'); els.tintOverlay = $('tint-overlay');
+}
+
+// ============ AUDIO ============
+let audioCtx=null, masterGain=null, musicGain=null, bgmTimer=null, bgmStartTime=0, bgmStep=0;
+
+function nf(name){
+  const m = name.match(/^([A-G])(#|b)?(-?\d)$/); if(!m) return 0;
+  const letters = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+  let semi = letters[m[1]] + (m[2]==='#'?1:m[2]==='b'?-1:0);
+  const oct = parseInt(m[3],10);
+  return 440 * Math.pow(2,((oct+1)*12+semi-69)/12);
+}
+function ensureAudio(){
+  if(audioCtx) return audioCtx;
+  try{
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = gameState.muted ? 0 : 0.7;
+    masterGain.connect(audioCtx.destination);
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = 0.55;
+    musicGain.connect(masterGain);
+  }catch(e){}
+  return audioCtx;
+}
+function note(when, freq, dur, opts={}){
+  const ctx = ensureAudio(); if(!ctx || !freq) return;
+  const dest = opts.dest || masterGain;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = opts.type || 'square';
+  osc.frequency.value = freq;
+  if(opts.detune) osc.detune.value = opts.detune;
+  const vol = opts.vol != null ? opts.vol : 0.08;
+  const attack = opts.attack || 0.005;
+  const release = opts.release || 0.04;
+  g.gain.setValueAtTime(0, when);
+  g.gain.linearRampToValueAtTime(vol, when + attack);
+  g.gain.setValueAtTime(vol, when + Math.max(attack, dur - release));
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  osc.connect(g).connect(dest);
+  osc.start(when); osc.stop(when + dur + 0.02);
+}
+function noteThick(when, freq, dur, opts={}){
+  note(when, freq, dur, {...opts, detune: -6});
+  note(when, freq, dur, {...opts, detune: +6, vol:(opts.vol||0.08)*0.6});
+}
+function playHover(){ const c=ensureAudio(); if(!c) return; note(c.currentTime, nf('E5'), 0.05, {vol:0.04}); }
+function playClick(){ const c=ensureAudio(); if(!c) return; const t=c.currentTime; note(t, nf('A5'), 0.06, {vol:0.07}); note(t+0.04, nf('E5'), 0.08, {vol:0.05}); }
+function playCorrect(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  ['C5','E5','G5','C6','E6'].forEach((n,i)=> note(t+i*0.07, nf(n), 0.12, {vol:0.08}));
+  ['G4','C5','E5','G5','C6'].forEach((n,i)=> note(t+i*0.07, nf(n), 0.12, {type:'triangle', vol:0.06}));
+}
+function playWrong(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  ['A4','G4','F#4','F4','E4'].forEach((n,i)=> note(t+i*0.08, nf(n), 0.18, {type:'sawtooth', vol:0.07}));
+  note(t, nf('A2'), 0.5, {type:'sine', vol:0.18});
+}
+function playMeow(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  const osc = c.createOscillator(); const g = c.createGain();
+  osc.type='sawtooth';
+  osc.frequency.setValueAtTime(700,t);
+  osc.frequency.exponentialRampToValueAtTime(1100,t+0.08);
+  osc.frequency.exponentialRampToValueAtTime(500,t+0.28);
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.06,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.32);
+  const f = c.createBiquadFilter(); f.type='lowpass'; f.frequency.value=1800;
+  osc.connect(f).connect(g).connect(masterGain);
+  osc.start(t); osc.stop(t+0.35);
+}
+function playLidThump(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  note(t, nf('C2'), 0.18, {type:'sine', vol:0.22});
+  const buf = c.createBuffer(1, c.sampleRate*0.04, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+  const s = c.createBufferSource(); s.buffer=buf;
+  const f = c.createBiquadFilter(); f.type='highpass'; f.frequency.value=1500;
+  const g = c.createGain(); g.gain.value=0.18;
+  s.connect(f).connect(g).connect(masterGain); s.start(t);
+}
+function playBoxShake(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  for(let i=0;i<5;i++){
+    note(t+i*0.09, 80+Math.random()*40, 0.06, {vol:0.05});
+    note(t+i*0.09, 200+Math.random()*60, 0.04, {type:'triangle', vol:0.03});
+  }
+}
+function playCollapse(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  const buf = c.createBuffer(1, c.sampleRate*0.4, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+  const s = c.createBufferSource(); s.buffer=buf;
+  const f = c.createBiquadFilter(); f.type='bandpass'; f.Q.value=8;
+  f.frequency.setValueAtTime(2000,t); f.frequency.exponentialRampToValueAtTime(400,t+0.4);
+  const g = c.createGain(); g.gain.value=0.15;
+  s.connect(f).connect(g).connect(masterGain); s.start(t);
+  note(t, nf('A6'), 0.25, {vol:0.06}); note(t+0.05, nf('D6'), 0.2, {vol:0.05});
+}
+function playGate(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  ['G5','B5','D6','G6'].forEach((n,i)=> note(t+i*0.05, nf(n), 0.1, {type:'square', vol:0.07}));
+}
+function playGeigerTick(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  const buf = c.createBuffer(1, c.sampleRate*0.025, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+  const s = c.createBufferSource(); s.buffer=buf;
+  const f = c.createBiquadFilter(); f.type='highpass'; f.frequency.value=3000;
+  const g = c.createGain(); g.gain.value=0.06;
+  s.connect(f).connect(g).connect(masterGain); s.start(t);
+}
+function playLevelUp(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  ['C5','E5','G5','C6','E6','G6','C7'].forEach((n,i)=> noteThick(t+i*0.09, nf(n), 0.18, {vol:0.09}));
+}
+function playAch(){
+  const c=ensureAudio(); if(!c) return; const t=c.currentTime;
+  ['G5','C6','E6','G6'].forEach((n,i)=> note(t+i*0.06, nf(n), 0.1, {vol:0.07}));
+}
+function playIntro(onDone){
+  const c=ensureAudio(); if(!c){ onDone&&onDone(); return 0; }
+  const t0 = c.currentTime + 0.05; const beat = 0.14;
+  const lead = [['E5',1],['G5',1],['B5',1],['E6',2],['D6',1],['B5',1],['G5',1],['B5',2],['C6',1],['E6',1],['G6',2],['E6',2]];
+  const bass = [['E3',2],['G3',2],['A3',2],['B3',2],['C4',4]];
+  let t = t0; lead.forEach(([n,d])=>{ noteThick(t, nf(n), beat*d*0.95, {vol:0.09, dest:musicGain}); t += beat*d; });
+  let tb = t0; bass.forEach(([n,d])=>{ note(tb, nf(n), beat*d*0.95, {type:'triangle', vol:0.13, dest:musicGain}); tb += beat*d; });
+  ['B6','E7','B6'].forEach((n,i)=> note(t0+1.4+i*0.08, nf(n), 0.1, {vol:0.05, dest:musicGain}));
+  const total = (t-t0)*1000+100;
+  setTimeout(()=>{ onDone&&onDone(); }, total);
+  return total;
+}
+// BGM (loop)
+const BGM_TEMPO = 96;
+const BGM_BEAT = 60/BGM_TEMPO;
+const BGM_STEP = BGM_BEAT/2;
+const BGM_BARS = 8;
+const BGM_STEPS = BGM_BARS*8;
+const BGM_CHORDS = [
+  ['A3','C4','E4'],['A3','C4','E4'],['F3','A3','C4'],['F3','A3','C4'],
+  ['C3','E3','G3'],['C3','E3','G3'],['G3','B3','D4'],['G3','B3','D4'],
+];
+const BGM_BASS_ROOTS = ['A2','A2','F2','F2','C2','C2','G2','G2'];
+const BGM_MELODY = [
+  'A5',null,null,'E5',null,'C5',null,null,null,'A5',null,null,'B5',null,'A5',null,
+  'F5',null,null,'C5',null,'A4',null,null,null,'F5',null,null,'G5',null,'F5',null,
+  'G5',null,null,'E5',null,'C5',null,null,null,'G5',null,null,'A5',null,'G5',null,
+  'B5',null,null,'D6',null,'B5',null,null,null,'D6',null,null,'B5','A5','G5',null,
+];
+function scheduleBgmStep(stepIdx, when){
+  const bar = Math.floor(stepIdx/8);
+  const beatInBar = Math.floor((stepIdx%8)/2);
+  const isBeat = stepIdx%2 === 0;
+  if(isBeat && (beatInBar===0 || beatInBar===2)){
+    note(when, nf(BGM_BASS_ROOTS[bar]), BGM_BEAT*1.6, {type:'triangle', vol:0.13, dest:musicGain});
+  }
+  const chord = BGM_CHORDS[bar];
+  const arpName = chord[stepIdx%chord.length].replace(/(\d)/, (m,d)=>String(parseInt(d)+1));
+  note(when, nf(arpName), BGM_STEP*0.9, {vol:0.04, dest:musicGain});
+  const mel = BGM_MELODY[stepIdx];
+  if(mel){
+    note(when, nf(mel), BGM_STEP*1.8, {vol:0.07, dest:musicGain});
+    note(when, nf(mel), BGM_STEP*1.8, {type:'triangle', vol:0.04, detune:7, dest:musicGain});
+  }
+  if(!isBeat && bar%2===1){
+    const c = audioCtx;
+    const buf = c.createBuffer(1, c.sampleRate*0.05, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+    const s = c.createBufferSource(); s.buffer=buf;
+    const g = c.createGain(); g.gain.value=0.025;
+    s.connect(g).connect(musicGain); s.start(when);
+  }
+}
+function startBgm(){
+  const c = ensureAudio(); if(!c) return;
+  if(bgmTimer) return;
+  bgmStep = 0; bgmStartTime = c.currentTime + 0.1;
+  const SCHED = 0.25;
+  const tick = ()=>{
+    if(!bgmTimer) return;
+    const now = c.currentTime;
+    while(bgmStartTime + bgmStep*BGM_STEP < now + SCHED){
+      scheduleBgmStep(bgmStep%BGM_STEPS, bgmStartTime + bgmStep*BGM_STEP);
+      bgmStep++;
+    }
+  };
+  tick();
+  bgmTimer = setInterval(tick, 80);
+}
+function stopBgm(){ if(bgmTimer){ clearInterval(bgmTimer); bgmTimer=null; } }
+function applyMute(){
+  if(!masterGain) return;
+  const c = audioCtx;
+  masterGain.gain.cancelScheduledValues(c.currentTime);
+  masterGain.gain.linearRampToValueAtTime(gameState.muted ? 0 : 0.7, c.currentTime + 0.1);
+}
+
+// ============ EFFECTS ============
+function triggerScreenShake(){
+  els.app.classList.remove('shake'); void els.app.offsetWidth;
+  els.app.classList.add('shake');
+  setTimeout(()=>els.app.classList.remove('shake'), 450);
+}
+function triggerGlitch(){
+  els.glitch.classList.remove('active'); void els.glitch.offsetWidth;
+  els.glitch.classList.add('active');
+  setTimeout(()=>els.glitch.classList.remove('active'), 320);
+}
+function spawnParticles(centerX, centerY){
+  const colors = ['#39ff14','#00ffff','#ffe600','#ff2bd6','#fff'];
+  const r = els.stage.getBoundingClientRect();
+  const px = centerX - r.left, py = centerY - r.top;
+  for(let i=0;i<18;i++){
+    const p = document.createElement('div');
+    p.className='particle';
+    p.style.left=px+'px'; p.style.top=py+'px';
+    p.style.background = colors[i%colors.length];
+    const angle = (Math.PI*2)*(i/18) + Math.random()*0.4;
+    const dist = 60 + Math.random()*60;
+    p.style.setProperty('--dx', Math.cos(angle)*dist+'px');
+    p.style.setProperty('--dy', Math.sin(angle)*dist+'px');
+    els.stage.appendChild(p);
+    p.addEventListener('animationend', ()=>p.remove());
+  }
+}
+function spawnParticleStorm(){
+  const r = els.stage.getBoundingClientRect();
+  for(let i=0;i<60;i++){
+    setTimeout(()=>spawnParticles(r.left + r.width/2 + (Math.random()*200-100), r.top + r.height/2 + (Math.random()*200-100)), i*15);
+  }
+}
+function showCombo(streak){
+  els.comboText.textContent = `× ${streak} COMBO!`;
+  els.comboOverlay.classList.remove('active'); void els.comboOverlay.offsetWidth;
+  els.comboOverlay.classList.add('active');
+  setTimeout(()=>els.comboOverlay.classList.remove('active'), 1200);
+  spawnParticleStorm();
+}
+// Background tinting based on alpha (alive amplitude)
+function tintBackground(alpha){
+  let color = 'transparent';
+  if(alpha > 0.65)      color = 'rgba(57,255,20,.15)';   // alive — green
+  else if(alpha < 0.35) color = 'rgba(255,43,214,.15)';  // dead — magenta
+  else                  color = 'rgba(0,255,255,.10)';   // neutral
+  document.documentElement.style.setProperty('--tint', color);
+  // Box aura also follows
+  const glow = alpha > 0.65 ? 'rgba(57,255,20,.30)' : alpha < 0.35 ? 'rgba(255,43,214,.30)' : 'rgba(0,255,255,.18)';
+  document.documentElement.style.setProperty('--glow', glow);
+}
+
+// ============ CUES (Geiger / Atom / Glow) ============
+// Geiger ticks faster when decay is more likely (cat more likely DEAD)
+function startGeiger(){
+  stopGeiger();
+  const tick = ()=>{
+    if(!gameState.geigerTimer) return;
+    if(gameState.phase !== 'superposition'){ stopGeiger(); return; }
+    // visual spark + audio tick
+    if(els.spark1){
+      els.spark1.style.animation='none'; void els.spark1.offsetWidth;
+      els.spark1.style.animation='sparkPop .15s';
+    }
+    playGeigerTick();
+    // Schedule next based on alpha. Higher decay rate (low α) = faster ticks.
+    // At α=0.5: ~600ms. α=0.2 (cat usually dead): ~200ms. α=0.8 (cat usually alive): ~1100ms.
+    const baseInterval = 200 + gameState.alpha * 1100;
+    const jitter = (rng()-0.5) * baseInterval * 0.3;
+    gameState.geigerInterval = Math.max(120, baseInterval + jitter);
+    gameState.geigerTimer = setTimeout(tick, gameState.geigerInterval);
+  };
+  gameState.geigerTimer = setTimeout(tick, 200);
+}
+function stopGeiger(){ if(gameState.geigerTimer){ clearTimeout(gameState.geigerTimer); gameState.geigerTimer=null; } }
+// Atom spin speed — faster when decay more likely
+function applyAtomSpin(){
+  // α=0.5 → 4s. α=0.2 → 1.2s (fast spin = lots of decay). α=0.8 → 7s.
+  const spin = 1.2 + gameState.alpha * 6;
+  document.documentElement.style.setProperty('--spin', spin + 's');
+}
+
+// ============ QUANTUM GATES ============
+function refreshGates(){
+  const thresholds = {H:3, X:5, M:7, C:10};
+  for(const k of ['H','X','M','C']){
+    const el = $('gate-'+k.toLowerCase());
+    if(!el) continue;
+    const unlocked = gameState.streak >= thresholds[k] || gameState.gates[k];
+    if(unlocked){
+      gameState.gates[k] = true;
+      el.classList.add('unlocked');
+      const lockEl = el.querySelector('.lock');
+      if(lockEl) lockEl.textContent = gameState.gatesArmed[k] ? 'ARMED' : 'READY';
+      el.classList.toggle('armed', !!gameState.gatesArmed[k]);
+    } else {
+      el.classList.remove('unlocked','armed');
+    }
+  }
+  // CNOT only usable in entangled rounds
+  if(gameState.gates.C && gameState.currentRoundType !== 'entangled'){
+    els.gateC.style.opacity = '0.5';
+  } else {
+    els.gateC.style.opacity = '';
+  }
+}
+function activateGate(g){
+  if(!gameState.gates[g]) return;
+  if(gameState.phase !== 'superposition') return;
+  if(g === 'H'){
+    // Hadamard: reset bias to exact 0.5 for this round
+    gameState.alpha = 0.5;
+    applyAtomSpin();
+    tintBackground(0.5);
+    if(gameState.geigerTimer){ stopGeiger(); startGeiger(); }
+    els.biasReadout.textContent = '⟨H⟩ APPLIED — ψ NOW EQUAL SUPERPOSITION';
+    gameState.gatesUsed.H++;
+    playGate();
+  } else if(g === 'X'){
+    // Pauli-X: arm a flip (used after observation)
+    gameState.gatesArmed.X = true;
+    gameState.pendingFlip = true;
+    els.biasReadout.textContent = '⟨X⟩ ARMED — FLIP RESULT AFTER OBSERVING';
+    gameState.gatesUsed.X++;
+    playGate();
+  } else if(g === 'M'){
+    // Probe: reveal alpha as %, forfeit streak bonus
+    gameState.probeUsed = true;
+    const pct = Math.round(gameState.alpha*100);
+    els.biasReadout.textContent = `◉ PROBE: P(ALIVE) = ${pct}%  |  P(DEAD) = ${100-pct}%`;
+    gameState.gatesUsed.M++;
+    playGate();
+  } else if(g === 'C'){
+    if(gameState.currentRoundType !== 'entangled') return;
+    gameState.entangleType = gameState.entangleType === 'phi+' ? 'psi+' : 'phi+';
+    updateEntangleInfo();
+    gameState.gatesUsed.C++;
+    playGate();
+  }
+  refreshGates();
+}
+
+// ============ STAKES ============
+function setStake(s){
+  gameState.stake = s;
+  document.querySelectorAll('.chip').forEach(b=>{
+    b.classList.toggle('active', parseInt(b.dataset.stake,10) === s);
+  });
+}
+function stakePayout(correct){
+  if(correct){
+    return [0,100,200,400][gameState.stake];
+  } else {
+    return [0,0,-50,-150][gameState.stake];
+  }
+}
+
+// ============ LEVELS ============
+function getLevelByScore(score){
+  let lvl = 1;
+  for(const L of LEVELS){ if(score >= L.threshold) lvl = L.n; }
+  return lvl;
+}
+function maybeLevelUp(){
+  const newLvl = getLevelByScore(gameState.score);
+  if(newLvl > gameState.level){
+    gameState.level = newLvl;
+    showLevelSplash(newLvl);
+    if(newLvl >= 6) unlockAch('ascendant');
+    return true;
+  }
+  return false;
+}
+function showLevelSplash(lvl){
+  const L = LEVELS.find(x=>x.n===lvl);
+  els.lvlNum.textContent = `LEVEL ${L.n}`;
+  els.lvlName.textContent = L.name;
+  els.lvlDesc.textContent = L.desc;
+  els.levelSplash.classList.add('active');
+  gameState.phase = 'levelsplash';
+  playLevelUp();
+}
+function dismissLevelSplash(){
+  els.levelSplash.classList.remove('active');
+  startRound();
+}
+
+// ============ ROUND TYPES ============
+// Pick the round type based on level + cadence
+function pickRoundType(){
+  // Boss rounds every 10
+  if(gameState.level >= 3 && gameState.currentRound > 0 && gameState.currentRound % 10 === 0){
+    const bosses = ['boss-mw','boss-zeno','boss-deco'];
+    return bosses[Math.floor(rng()*bosses.length)];
+  }
+  if(gameState.level >= 5 && rng() < 0.20) return 'qutrit';
+  if(gameState.level >= 4 && rng() < 0.25) return 'entangled';
+  return 'standard';
+}
+function rollAlpha(){
+  if(gameState.level === 1) return 0.5;
+  // 0.2 to 0.8
+  return 0.2 + rng() * 0.6;
+}
+
+// ============ GAME FLOW ============
+function setScreen(name){
+  ['titleScreen','briefingScreen','statsScreen','skinsScreen','gameScreen'].forEach(k=>{
+    els[k].classList.toggle('active', k.toLowerCase().replace('screen','') === name);
+  });
+}
+
+let factIdx = 0, factTimer = null;
+function rotateFact(){ els.factText.textContent = QUANTUM_FACTS[factIdx % QUANTUM_FACTS.length]; factIdx++; }
+
+function showTitle(){
+  gameState.phase = 'title';
+  setScreen('title');
+  loadHighScore();
+  loadStats();
+  loadAchievements();
+  loadSkins();
+  els.titleHigh.textContent = gameState.highScore > 0 ? `HIGH SCORE: ${gameState.highScore}` : '';
+  rotateFact();
+  if(factTimer) clearInterval(factTimer);
+  factTimer = setInterval(rotateFact, 4000);
+  stopBgm();
+  document.documentElement.style.setProperty('--tint','transparent');
+  document.documentElement.style.setProperty('--glow','rgba(0,255,255,.18)');
+}
+function showBriefing(){
+  if(factTimer){ clearInterval(factTimer); factTimer=null; }
+  gameState.phase = 'briefing';
+  setScreen('briefing');
+}
+function showStats(){
+  gameState.phase = 'stats';
+  setScreen('stats');
+  renderStats();
+}
+function showSkins(){
+  gameState.phase = 'skins';
+  setScreen('skins');
+  renderSkins();
+}
+
+function startGame(daily=false){
+  if(factTimer){ clearInterval(factTimer); factTimer=null; }
+  gameState.score = 0;
+  gameState.wins = 0;
+  gameState.losses = 0;
+  gameState.streak = 0;
+  gameState.currentRound = 1;
+  gameState.level = 1;
+  gameState.daily = daily;
+  gameState.dailyRoundsLeft = daily ? 20 : 0;
+  for(const k of ['H','X','M','C']){ gameState.gates[k]=false; gameState.gatesArmed[k]=false; gameState.gatesUsed[k]=0; }
+  gameState.consecutive3xWins = 0;
+  setStake(1);
+  if(daily){
+    const [seed, dateStr] = dailySeed();
+    rng = mulberry32(seed);
+    gameState.dailyDate = dateStr;
+  } else {
+    rng = Math.random;
+  }
+  refreshStats();
+  refreshGates();
+  setScreen('game');
+  ensureAudio();
+  els.btnAlive.disabled = true;
+  els.btnDead.disabled = true;
+  gameState.phase = 'intro';
+  const introMs = playIntro(()=>{
+    startBgm();
+    startRound();
+  });
+  if(!introMs) setTimeout(()=>{ startBgm(); startRound(); }, 100);
+}
+
+function refreshStats(){
+  els.scoreVal.textContent = gameState.score;
+  els.winsVal.textContent = gameState.wins;
+  els.lossesVal.textContent = gameState.losses;
+  els.streakVal.innerHTML = `<span class="flame ${gameState.streak>0?'on':''}">★</span> ${gameState.streak}`;
+  els.highVal.textContent = gameState.highScore;
+  els.chromeLevel.textContent = `LV ${gameState.level}` + (gameState.daily ? ` • DAILY ${gameState.dailyRoundsTotal - gameState.dailyRoundsLeft + 1}/${gameState.dailyRoundsTotal}` : '');
+  // Progress to next level
+  const cur = LEVELS.find(l=>l.n===gameState.level);
+  const next = LEVELS.find(l=>l.n===gameState.level+1);
+  if(next){
+    const span = next.threshold - cur.threshold;
+    const into = Math.max(0, gameState.score - cur.threshold);
+    const pct = Math.min(100, Math.round((into/span)*100));
+    els.progressFill.style.width = pct+'%';
+    els.progressLabel.textContent = `LV${gameState.level} → LV${next.n}  ${gameState.score}/${next.threshold}`;
+  } else {
+    els.progressFill.style.width = '100%';
+    els.progressLabel.textContent = `MAX LEVEL · ${gameState.score} PTS`;
+  }
+}
+// Animated score change to make rewards feel punchy
+function animateScoreChange(delta){
+  const stat = els.scoreVal.parentElement;
+  if(delta > 0){ stat.classList.remove('score-pop'); void stat.offsetWidth; stat.classList.add('score-pop'); setTimeout(()=>stat.classList.remove('score-pop'),500); }
+  else if(delta < 0){ stat.classList.remove('score-loss'); void stat.offsetWidth; stat.classList.add('score-loss'); setTimeout(()=>stat.classList.remove('score-loss'),500); }
+}
+// Plain-English bias hint based on cues (shown at L2+)
+function biasHint(){
+  const a = gameState.alpha;
+  if(a >= 0.65) return '🟢 ALIVE LOOKS LIKELY';
+  if(a >= 0.55) return '🟢 LEANING ALIVE';
+  if(a > 0.45)  return '❓ TOO CLOSE TO CALL';
+  if(a > 0.35)  return '🟣 LEANING DEAD';
+  return '🟣 DEAD LOOKS LIKELY';
+}
+
+// ============ ROUND: SETUP ============
+function startRound(){
+  // Daily mode: end after 20 rounds
+  if(gameState.daily && gameState.dailyRoundsLeft <= 0){ finishDaily(); return; }
+  // Pick round type
+  gameState.currentRoundType = pickRoundType();
+  gameState.alpha = rollAlpha();
+  gameState.entangleType = (gameState.currentRoundType === 'entangled') ? (rng()<0.5?'phi+':'psi+') : null;
+  gameState.pendingFlip = false;
+  gameState.probeUsed = false;
+  gameState.gatesArmed.X = false;
+  // Cosmetic visuals
+  applyAtomSpin();
+  tintBackground(gameState.currentRoundType === 'entangled' ? 0.5 : gameState.alpha);
+  // Reset boxes UI
+  els.boxArea2.style.display = (gameState.currentRoundType === 'entangled') ? '' : 'none';
+  els.btnAsleep.style.display = (gameState.currentRoundType === 'qutrit') ? '' : 'none';
+  els.choiceRow.classList.toggle('three', gameState.currentRoundType === 'qutrit');
+  els.mwArea.style.display = (gameState.currentRoundType === 'boss-mw') ? '' : 'none';
+  document.querySelector('.boxes-row').style.display = (gameState.currentRoundType === 'boss-mw') ? 'none' : 'flex';
+  els.choiceRow.style.display = (gameState.currentRoundType === 'boss-mw') ? 'none' : 'grid';
+  els.stakeRow.style.display = (gameState.level >= 2 && gameState.currentRoundType !== 'boss-mw') ? '' : 'none';
+  // Bias readout: hidden at L1 (no cues), visible elsewhere if probe used
+  els.biasReadout.textContent = '';
+  // Entanglement label
+  updateEntangleInfo();
+  // Boss-specific setup
+  if(gameState.currentRoundType === 'boss-mw'){ setupManyWorlds(); return; }
+  if(gameState.currentRoundType === 'boss-zeno'){ setupZeno(); return; }
+  // Enter the drop-in animation, then superposition
+  setupNextRound();
+}
+
+function updateEntangleInfo(){
+  if(gameState.currentRoundType === 'entangled' && gameState.entangleType){
+    const sym = gameState.entangleType === 'phi+' ? '|Φ+⟩  CORRELATED' : '|Ψ+⟩  ANTI-CORRELATED';
+    els.entangleInfo.textContent = sym;
+  } else {
+    els.entangleInfo.textContent = '';
+  }
+}
+
+// Animate cat dropping into box
+function setupNextRound(){
+  refreshStats();
+  refreshGates();
+  gameState.phase = 'loading';
+  els.btnAlive.disabled = true; els.btnDead.disabled = true; els.btnAsleep.disabled = true;
+  els.psiLabel.textContent = 'PLACING SUBJECT...';
+  els.psiLabel.classList.remove('collapsed');
+  els.boxLid.classList.add('open');
+  els.catAlive.classList.add('hidden');
+  els.catDead.classList.add('hidden');
+  els.catAsleep.classList.add('hidden');
+  els.catAlive.classList.remove('flicker','tail-wag');
+  els.catDead.classList.remove('flicker');
+  els.catAsleep.classList.remove('flicker');
+  // Box 2 lid open + cats reset
+  if(gameState.currentRoundType === 'entangled'){
+    els.boxLid2.classList.add('open');
+    document.querySelectorAll('.cat2-alive,.cat2-dead').forEach(el=>{
+      el.classList.add('hidden'); el.classList.remove('flicker','tail-wag');
+    });
+  }
+  els.boxWrap.classList.remove('box-shrink'); void els.boxWrap.offsetWidth;
+  els.boxWrap.classList.add('box-shrink');
+
+  // Beam + falling cat
+  const beam = document.createElement('div'); beam.className='drop-beam';
+  els.stage.appendChild(beam); setTimeout(()=>beam.remove(), 2300);
+  const sourceCat = els.catAlive;
+  const falling = document.createElement('div'); falling.className='falling-cat';
+  const cloned = sourceCat.cloneNode(true);
+  cloned.classList.remove('hidden','flicker','tail-wag');
+  cloned.removeAttribute('id'); cloned.style.opacity='1';
+  falling.appendChild(cloned);
+  els.stage.appendChild(falling);
+  setTimeout(()=>falling.remove(), 2300);
+
+  playMeow();
+  setTimeout(()=>{
+    const flash = document.createElement('div'); flash.className='impact-flash-stage';
+    els.stage.appendChild(flash); setTimeout(()=>flash.remove(), 600);
+    playLidThump();
+  }, 1850);
+  setTimeout(()=>{
+    els.boxWrap.classList.remove('box-shrink');
+    els.boxLid.classList.remove('open');
+    if(gameState.currentRoundType === 'entangled') els.boxLid2.classList.remove('open');
+    playLidThump();
+    setTimeout(()=>{
+      els.boxWrap.classList.remove('shake-box'); void els.boxWrap.offsetWidth;
+      els.boxWrap.classList.add('shake-box');
+      playBoxShake();
+      setTimeout(()=>{
+        els.boxWrap.classList.remove('shake-box');
+        enterSuperposition();
+      }, 620);
+    }, 320);
+  }, 2300);
+}
+
+function enterSuperposition(){
+  gameState.phase = 'superposition';
+  // Update psi label per level
+  if(gameState.currentRoundType === 'entangled'){
+    els.psiLabel.textContent = gameState.entangleType === 'phi+' ? '|ψ⟩ = (|↑↑⟩ + |↓↓⟩)/√2' : '|ψ⟩ = (|↑↓⟩ + |↓↑⟩)/√2';
+  } else if(gameState.currentRoundType === 'qutrit'){
+    els.psiLabel.textContent = 'ψ = α|A⟩ + β|D⟩ + γ|S⟩';
+  } else {
+    els.psiLabel.textContent = 'ψ = α|ALIVE⟩ + β|DEAD⟩';
+  }
+  els.psiLabel.classList.remove('collapsed');
+  // Show flickering cats
+  els.catAlive.classList.remove('hidden'); els.catAlive.classList.add('flicker');
+  els.catDead.classList.remove('hidden'); els.catDead.classList.add('flicker');
+  els.catAlive.classList.remove('tail-wag');
+  if(gameState.currentRoundType === 'qutrit'){
+    els.catAsleep.classList.remove('hidden'); els.catAsleep.classList.add('flicker');
+  }
+  if(gameState.currentRoundType === 'entangled'){
+    document.querySelectorAll('.cat2-alive,.cat2-dead').forEach(el=>{
+      el.classList.remove('hidden'); el.classList.add('flicker');
+    });
+  }
+  els.btnAlive.disabled = false; els.btnDead.disabled = false; els.btnAsleep.disabled = false;
+  els.resultOverlay.classList.remove('active','win','lose');
+  els.flipBtn.style.display = 'none';
+  // Bias readout per level
+  if(gameState.level === 1){
+    els.biasReadout.textContent = 'TUTORIAL — PURE 50/50, JUST GUESS!';
+    els.cueLegend.classList.remove('show');
+  } else if(!gameState.probeUsed){
+    els.biasReadout.textContent = biasHint();
+    els.cueLegend.classList.add('show');
+  } else {
+    els.cueLegend.classList.add('show');
+  }
+  // Cues
+  startGeiger();
+  applyAtomSpin();
+  // Decoherence timer at L3+ or boss-deco
+  let timerDur = 0;
+  if(gameState.currentRoundType === 'boss-deco') timerDur = 1500;
+  else if(gameState.level >= 3) timerDur = Math.max(2000, 4000 - (gameState.level-3)*500);
+  if(timerDur > 0) startDecoherenceTimer(timerDur);
+  else stopDecoherenceTimer();
+  refreshGates();
+}
+
+// ============ TIMER ============
+function startDecoherenceTimer(duration){
+  stopDecoherenceTimer();
+  gameState.decoherenceActive = true;
+  gameState.decoherenceDuration = duration;
+  gameState.decoherenceStart = performance.now();
+  els.timerWrap.classList.add('active');
+  els.timerFill.style.width = '100%';
+  const tick = (now)=>{
+    if(!gameState.decoherenceActive) return;
+    const e = now - gameState.decoherenceStart;
+    const pct = Math.max(0, 1 - e/duration);
+    els.timerFill.style.width = (pct*100)+'%';
+    if(pct <= 0){ gameState.decoherenceActive = false; observeBox(null); return; }
+    gameState.decoherenceRaf = requestAnimationFrame(tick);
+  };
+  gameState.decoherenceRaf = requestAnimationFrame(tick);
+}
+function stopDecoherenceTimer(){
+  gameState.decoherenceActive = false;
+  if(gameState.decoherenceRaf){ cancelAnimationFrame(gameState.decoherenceRaf); gameState.decoherenceRaf=null; }
+  els.timerWrap.classList.remove('active');
+}
+
+// ============ OBSERVE & RESOLVE (THE QUANTUM POINT) ============
+function observeBox(playerGuess){
+  if(gameState.phase !== 'superposition') return;
+  gameState.phase = 'observing';
+  stopDecoherenceTimer();
+  stopGeiger();
+  els.btnAlive.disabled = true; els.btnDead.disabled = true; els.btnAsleep.disabled = true;
+
+  // ============================================================
+  // QUANTUM POINT: The cat's state is determined HERE — at the
+  // moment of observation — NOT when the round started. Until
+  // these lines execute, the cat genuinely has no definite state.
+  // The bias α represents the squared amplitude |α|² of the alive
+  // component in the wave function ψ = α|ALIVE⟩ + β|DEAD⟩, where
+  // |α|² + |β|² = 1. Drawing rng() < α is exactly Born's rule:
+  // the probability of measuring outcome A is the squared modulus
+  // of its amplitude in the state vector.
+  // ============================================================
+  let actual1=null, actual2=null;
+  if(gameState.currentRoundType === 'qutrit'){
+    // Three-state: split alpha into thirds biased by alpha
+    // P(alive)=alpha, P(dead)=(1-alpha)*0.6, P(asleep)=(1-alpha)*0.4
+    const r = rng();
+    if(r < gameState.alpha) actual1 = 'alive';
+    else if(r < gameState.alpha + (1-gameState.alpha)*0.6) actual1 = 'dead';
+    else actual1 = 'asleep';
+  } else if(gameState.currentRoundType === 'entangled'){
+    // Bell pair: first cat collapses, second is forced by entanglement type
+    actual1 = rng() < gameState.alpha ? 'alive' : 'dead';
+    if(gameState.entangleType === 'phi+') actual2 = actual1;
+    else actual2 = (actual1 === 'alive') ? 'dead' : 'alive';
+  } else {
+    actual1 = rng() < gameState.alpha ? 'alive' : 'dead';
+  }
+
+  collapseWaveFunction(actual1, actual2, playerGuess);
+}
+
+function collapseWaveFunction(actual1, actual2, playerGuess){
+  triggerGlitch(); playCollapse();
+  els.psiLabel.textContent = 'ψ COLLAPSING...';
+  els.psiLabel.classList.add('collapsed');
+  setTimeout(()=>{
+    // Resolve sprites
+    [els.catAlive, els.catDead, els.catAsleep].forEach(el=>el.classList.remove('flicker'));
+    if(actual1 === 'alive'){ els.catDead.classList.add('hidden'); els.catAsleep.classList.add('hidden'); els.catAlive.classList.remove('hidden'); els.catAlive.classList.add('tail-wag'); }
+    else if(actual1 === 'dead'){ els.catAlive.classList.add('hidden'); els.catAsleep.classList.add('hidden'); els.catDead.classList.remove('hidden'); }
+    else { els.catAlive.classList.add('hidden'); els.catDead.classList.add('hidden'); els.catAsleep.classList.remove('hidden'); }
+    els.boxLid.classList.add('open');
+    if(actual2){
+      document.querySelectorAll('.cat2-alive,.cat2-dead').forEach(el=>el.classList.remove('flicker'));
+      const a2 = document.querySelector('.cat2-alive');
+      const d2 = document.querySelector('.cat2-dead');
+      if(actual2 === 'alive'){ a2.classList.remove('hidden'); d2.classList.add('hidden'); }
+      else { a2.classList.add('hidden'); d2.classList.remove('hidden'); }
+      els.boxLid2.classList.add('open');
+    }
+    // If X gate armed, give the player a flip option
+    if(gameState.gatesArmed.X){
+      gameState.phase = 'flip-window';
+      els.flipBtn.style.display = '';
+      els.flipBtn.dataset.actual1 = actual1;
+      els.flipBtn.dataset.actual2 = actual2 || '';
+      els.flipBtn.dataset.guess = playerGuess || '';
+      // brief overlay so player can choose
+      els.resultOverlay.classList.add('active');
+      els.verdictText.textContent = 'OBSERVED';
+      els.pointsText.textContent = '';
+      els.collapseState.textContent = (actual1||'').toUpperCase() + (actual2 ? ' / '+actual2.toUpperCase() : '');
+      return;
+    }
+    setTimeout(()=>resolveRound(playerGuess, actual1, actual2), 500);
+  }, 250);
+}
+
+function applyFlip(){
+  if(!gameState.gatesArmed.X) return;
+  const actual1 = els.flipBtn.dataset.actual1;
+  const actual2 = els.flipBtn.dataset.actual2 || null;
+  const guess = els.flipBtn.dataset.guess || null;
+  // Flip: swap the actual to the opposite of the guess (best case for player)
+  let f1 = actual1;
+  if(actual1 === 'alive') f1 = 'dead'; else if(actual1 === 'dead') f1 = 'alive';
+  // For qutrit, only flip alive/dead — leave asleep alone
+  // For entangled, also flip box 2 in opposite manner per entangle type
+  let f2 = actual2;
+  if(actual2){
+    if(gameState.entangleType === 'phi+') f2 = (f1 === 'alive') ? 'alive' : 'dead';
+    else f2 = (f1 === 'alive') ? 'dead' : 'alive';
+  }
+  // Update sprites visually
+  [els.catAlive, els.catDead, els.catAsleep].forEach(el=>el.classList.add('hidden'));
+  if(f1 === 'alive'){ els.catAlive.classList.remove('hidden'); els.catAlive.classList.add('tail-wag'); }
+  else if(f1 === 'dead') els.catDead.classList.remove('hidden');
+  else els.catAsleep.classList.remove('hidden');
+  if(f2){
+    document.querySelector('.cat2-alive').classList.toggle('hidden', f2 !== 'alive');
+    document.querySelector('.cat2-dead').classList.toggle('hidden', f2 !== 'dead');
+  }
+  gameState.gatesArmed.X = false;
+  els.flipBtn.style.display = 'none';
+  els.resultOverlay.classList.remove('active');
+  playGate();
+  setTimeout(()=>resolveRound(guess, f1, f2), 200);
+}
+
+function resolveRound(guess, actual1, actual2){
+  gameState.phase = 'result';
+  let correct = false;
+  if(gameState.currentRoundType === 'entangled'){
+    // Player guessed first box state; check if it matches actual1
+    correct = guess === actual1;
+  } else {
+    correct = guess === actual1;
+  }
+  let pts = 0;
+  if(correct){
+    gameState.wins++;
+    gameState.streak++;
+    let mult = 1;
+    if(gameState.currentRoundType === 'entangled') mult = 3;
+    if(gameState.currentRoundType === 'qutrit') mult = 2;
+    if(gameState.currentRoundType.startsWith('boss')) mult = Math.max(mult, 3);
+    pts = stakePayout(true) * mult;
+    if(!gameState.probeUsed){
+      const bonus = Math.min(200, (gameState.streak-1)*25);
+      pts += bonus;
+    }
+    gameState.score += pts;
+    animateScoreChange(pts);
+    if(gameState.score > gameState.highScore){ gameState.highScore = gameState.score; saveHighScore(); }
+    if(gameState.currentRoundType === 'entangled'){ gameState.entangledWins++; if(gameState.entangledWins >= 10) unlockAch('entangled_master'); }
+    if(gameState.currentRoundType.startsWith('boss')){ gameState.bossWins++; if(gameState.bossWins >= 10) unlockAch('wave_sage'); }
+    if(gameState.stake === 3){ gameState.consecutive3xWins++; if(gameState.consecutive3xWins >= 5) unlockAch('uncertain_right'); }
+    else gameState.consecutive3xWins = 0;
+    playCorrect();
+    const r = els.stage.getBoundingClientRect();
+    spawnParticles(r.left + r.width/2, r.top + r.height/2);
+    if(gameState.streak > 0 && gameState.streak % 5 === 0) showCombo(gameState.streak);
+  } else {
+    gameState.losses++;
+    pts = stakePayout(false);
+    gameState.score = Math.max(0, gameState.score + pts);
+    if(pts < 0) animateScoreChange(pts);
+    gameState.streak = 0;
+    gameState.consecutive3xWins = 0;
+    playWrong();
+    triggerScreenShake();
+  }
+  // Update stats
+  updateStats(correct);
+  if(gameState.stats.totalObservations === 1) unlockAch('first_obs');
+  // Check skin unlocks
+  checkSkinUnlocks();
+  // Increment round + maybe level up
+  gameState.currentRound++;
+  if(gameState.daily) gameState.dailyRoundsLeft--;
+  refreshStats();
+  // Show result overlay
+  els.resultOverlay.classList.remove('win','lose');
+  els.resultOverlay.classList.add(correct ? 'win' : 'lose');
+  els.verdictText.textContent = correct ? 'CORRECT!' : (guess === null ? 'TIME OUT!' : 'WRONG!');
+  els.pointsText.textContent = (pts >= 0 ? '+' : '') + pts + ' PTS';
+  let stateLabel = (actual1||'').toUpperCase();
+  if(actual2) stateLabel += ' / ' + actual2.toUpperCase();
+  els.collapseState.textContent = stateLabel;
+  els.flipBtn.style.display = 'none';
+  els.resultOverlay.classList.add('active');
+  setTimeout(()=>{
+    els.resultOverlay.classList.remove('active');
+    if(maybeLevelUp()) return;
+    if(gameState.daily && gameState.dailyRoundsLeft <= 0){ finishDaily(); return; }
+    startRound();
+  }, 1500);
+}
+
+// ============ MANY-WORLDS BOSS ============
+let mwAlpha = 0.5, mwGuess = 0;
+function setupManyWorlds(){
+  refreshStats();
+  gameState.phase = 'superposition';
+  mwAlpha = rollAlpha();
+  els.psiLabel.textContent = 'MANY-WORLDS BOSS';
+  els.biasReadout.textContent = 'GUESS HOW MANY OF 5 CATS SURVIVE';
+  els.mwBoxes.innerHTML = '';
+  for(let i=0;i<5;i++){
+    const b = document.createElement('div'); b.className='mini-box'; b.textContent='?'; els.mwBoxes.appendChild(b);
+  }
+  tintBackground(mwAlpha);
+  applyAtomSpin();
+  els.mwInput.value = '2';
+  // Active geiger reflecting mwAlpha
+  gameState.alpha = mwAlpha;
+  startGeiger();
+}
+function commitManyWorlds(){
+  if(gameState.phase !== 'superposition') return;
+  stopGeiger();
+  gameState.phase = 'observing';
+  const guess = Math.max(0, Math.min(5, parseInt(els.mwInput.value,10) || 0));
+  // Collapse all 5 simultaneously
+  let alive = 0; const results = [];
+  for(let i=0;i<5;i++){
+    const a = rng() < mwAlpha;
+    if(a) alive++;
+    results.push(a);
+  }
+  // Show results
+  const minis = els.mwBoxes.querySelectorAll('.mini-box');
+  results.forEach((a,i)=> minis[i].textContent = a ? '😺' : '✕');
+  triggerGlitch(); playCollapse();
+  setTimeout(()=>{
+    let pts = 0; let correct = false;
+    if(guess === alive){ pts = 600; correct = true; }
+    else if(Math.abs(guess - alive) === 1){ pts = 200; correct = false; }
+    else pts = -50;
+    if(correct){ gameState.wins++; gameState.streak++; gameState.bossWins++; if(gameState.bossWins>=10) unlockAch('wave_sage'); playCorrect(); animateScoreChange(pts); }
+    else { gameState.losses++; gameState.streak = 0; playWrong(); triggerScreenShake(); if(pts<0) animateScoreChange(pts); }
+    gameState.score = Math.max(0, gameState.score + pts);
+    if(gameState.score > gameState.highScore){ gameState.highScore = gameState.score; saveHighScore(); }
+    updateStats(correct);
+    gameState.currentRound++;
+    if(gameState.daily) gameState.dailyRoundsLeft--;
+    refreshStats();
+    els.resultOverlay.classList.remove('win','lose');
+    els.resultOverlay.classList.add(correct ? 'win' : 'lose');
+    els.verdictText.textContent = correct ? 'EXACT!' : (Math.abs(guess-alive)===1 ? 'CLOSE!' : 'OFF');
+    els.pointsText.textContent = (pts>=0?'+':'')+pts+' PTS';
+    els.collapseState.textContent = `${alive} OF 5 SURVIVED`;
+    els.resultOverlay.classList.add('active');
+    setTimeout(()=>{
+      els.resultOverlay.classList.remove('active');
+      if(maybeLevelUp()) return;
+      if(gameState.daily && gameState.dailyRoundsLeft <= 0){ finishDaily(); return; }
+      startRound();
+    }, 1700);
+  }, 600);
+}
+
+// ============ QUANTUM ZENO BOSS ============
+let zenoState = null;
+function setupZeno(){
+  gameState.phase = 'superposition';
+  els.psiLabel.textContent = 'QUANTUM ZENO BOSS';
+  els.biasReadout.textContent = '5 RAPID OBSERVATIONS — EACH FREEZES THE STATE';
+  zenoState = { rounds: 5, correct: 0, alpha: rollAlpha(), startTime: performance.now(), totalMs: 10000 };
+  gameState.alpha = zenoState.alpha;
+  applyAtomSpin();
+  startGeiger();
+  // run sub-rounds
+  zenoStep();
+  // Total timer — 10s
+  startDecoherenceTimer(10000);
+}
+function zenoStep(){
+  if(!zenoState || zenoState.rounds <= 0){ zenoFinish(); return; }
+  // Quick flicker
+  els.catAlive.classList.remove('hidden'); els.catAlive.classList.add('flicker');
+  els.catDead.classList.remove('hidden'); els.catDead.classList.add('flicker');
+  els.btnAlive.disabled = false; els.btnDead.disabled = false;
+  // Player must press something — handled in input
+}
+function zenoGuess(g){
+  if(!zenoState || gameState.phase !== 'superposition') return;
+  const actual = rng() < zenoState.alpha ? 'alive' : 'dead';
+  if(g === actual) zenoState.correct++;
+  // Zeno effect: each observation pulls alpha toward observed outcome
+  zenoState.alpha = zenoState.alpha * 0.6 + (actual === 'alive' ? 0.4 : 0);
+  gameState.alpha = zenoState.alpha;
+  applyAtomSpin();
+  tintBackground(zenoState.alpha);
+  zenoState.rounds--;
+  // Quick visual: flash result
+  els.catAlive.classList.toggle('hidden', actual !== 'alive');
+  els.catDead.classList.toggle('hidden', actual !== 'dead');
+  els.catAlive.classList.remove('flicker'); els.catDead.classList.remove('flicker');
+  setTimeout(()=>{
+    if(zenoState && zenoState.rounds > 0) zenoStep();
+    else zenoFinish();
+  }, 350);
+}
+function zenoFinish(){
+  if(!zenoState) return;
+  stopDecoherenceTimer(); stopGeiger();
+  const got = zenoState.correct;
+  zenoState = null;
+  let pts = got >= 4 ? 800 : got >= 3 ? 300 : got >= 2 ? 100 : -100;
+  const correct = got >= 3;
+  if(correct){ gameState.wins++; gameState.streak++; gameState.bossWins++; if(gameState.bossWins>=10) unlockAch('wave_sage'); playCorrect(); animateScoreChange(pts); }
+  else { gameState.losses++; gameState.streak = 0; playWrong(); triggerScreenShake(); if(pts<0) animateScoreChange(pts); }
+  gameState.score = Math.max(0, gameState.score + pts);
+  if(gameState.score > gameState.highScore){ gameState.highScore = gameState.score; saveHighScore(); }
+  updateStats(correct);
+  gameState.currentRound++;
+  if(gameState.daily) gameState.dailyRoundsLeft--;
+  refreshStats();
+  els.resultOverlay.classList.remove('win','lose');
+  els.resultOverlay.classList.add(correct ? 'win' : 'lose');
+  els.verdictText.textContent = `ZENO ${got}/5`;
+  els.pointsText.textContent = (pts>=0?'+':'')+pts+' PTS';
+  els.collapseState.textContent = correct ? 'STATE FROZEN' : 'DECOHERED';
+  els.resultOverlay.classList.add('active');
+  setTimeout(()=>{
+    els.resultOverlay.classList.remove('active');
+    if(maybeLevelUp()) return;
+    if(gameState.daily && gameState.dailyRoundsLeft <= 0){ finishDaily(); return; }
+    startRound();
+  }, 1700);
+}
+
+// ============ DAILY CHALLENGE ============
+function finishDaily(){
+  const share = `SCHRÖDINGER DAILY ${gameState.dailyDate} | SCORE: ${gameState.score} | STREAK: ${gameState.stats.longestStreak}`;
+  els.psiLabel.textContent = 'DAILY COMPLETE';
+  els.biasReadout.innerHTML = '';
+  els.mwArea.style.display = 'none';
+  document.querySelector('.boxes-row').style.display = 'flex';
+  els.choiceRow.style.display = 'none';
+  els.stakeRow.style.display = 'none';
+  // Build a temporary share box in the stage
+  const box = document.createElement('div');
+  box.className = 'share-box';
+  box.innerHTML = `${share}<br><br><button class="tiny-btn gold" id="copy-share">COPY</button> <button class="tiny-btn" id="back-title">TITLE</button>`;
+  els.stage.appendChild(box);
+  setTimeout(()=>{
+    const cs = $('copy-share'); const bt = $('back-title');
+    cs && cs.addEventListener('click', ()=>{
+      navigator.clipboard && navigator.clipboard.writeText(share).then(()=>{ cs.textContent = 'COPIED!'; });
+    });
+    bt && bt.addEventListener('click', ()=>{ box.remove(); stopBgm(); showTitle(); });
+  }, 50);
+  stopGeiger();
+}
+
+// ============ STATS / ACHIEVEMENTS / SKINS persistence ============
+function loadHighScore(){
+  try{ const v = parseInt(localStorage.getItem(HIGH_SCORE_KEY)||'0',10); gameState.highScore = isNaN(v)?0:v; }catch(e){ gameState.highScore = 0; }
+}
+function saveHighScore(){ try{ localStorage.setItem(HIGH_SCORE_KEY, String(gameState.highScore)); }catch(e){} }
+function loadStats(){
+  try{
+    const raw = localStorage.getItem(STATS_KEY);
+    gameState.stats = raw ? JSON.parse(raw) : null;
+  }catch(e){ gameState.stats = null; }
+  if(!gameState.stats) gameState.stats = { totalObservations:0, correctCount:0, longestStreak:0, totalScore:0, levelsReached:1, gatesUsed:{H:0,X:0,M:0,C:0} };
+}
+function saveStats(){ try{ localStorage.setItem(STATS_KEY, JSON.stringify(gameState.stats)); }catch(e){} }
+function updateStats(correct){
+  if(!gameState.stats) loadStats();
+  gameState.stats.totalObservations++;
+  if(correct) gameState.stats.correctCount++;
+  if(gameState.streak > gameState.stats.longestStreak) gameState.stats.longestStreak = gameState.streak;
+  gameState.stats.totalScore = Math.max(gameState.stats.totalScore, gameState.score);
+  gameState.stats.levelsReached = Math.max(gameState.stats.levelsReached, gameState.level);
+  gameState.stats.gatesUsed = gameState.gatesUsed;
+  saveStats();
+}
+function loadAchievements(){
+  try{ const raw = localStorage.getItem(ACH_KEY); const arr = raw ? JSON.parse(raw) : []; gameState.achievements = new Set(arr); }catch(e){ gameState.achievements = new Set(); }
+}
+function saveAchievements(){ try{ localStorage.setItem(ACH_KEY, JSON.stringify([...gameState.achievements])); }catch(e){} }
+function unlockAch(id){
+  if(gameState.achievements.has(id)) return;
+  gameState.achievements.add(id);
+  saveAchievements();
+  const a = ACHIEVEMENTS[id]; if(!a) return;
+  els.achName.textContent = a.name; els.achDesc.textContent = a.desc;
+  els.achToast.classList.add('active');
+  playAch();
+  setTimeout(()=>els.achToast.classList.remove('active'), 3500);
+}
+function loadSkins(){
+  try{
+    const raw = localStorage.getItem(SKINS_UNLOCKED_KEY);
+    gameState.skinsUnlocked = raw ? JSON.parse(raw) : ['classic'];
+  }catch(e){ gameState.skinsUnlocked = ['classic']; }
+  try{ gameState.skin = localStorage.getItem(SKIN_KEY) || 'classic'; }catch(e){ gameState.skin = 'classic'; }
+  applySkin();
+}
+function saveSkins(){
+  try{ localStorage.setItem(SKINS_UNLOCKED_KEY, JSON.stringify(gameState.skinsUnlocked)); }catch(e){}
+  try{ localStorage.setItem(SKIN_KEY, gameState.skin); }catch(e){}
+}
+function applySkin(){
+  const s = SKINS.find(x=>x.id===gameState.skin) || SKINS[0];
+  // Apply via CSS by injecting style for .catfur fill
+  let style = document.getElementById('skin-style');
+  if(!style){ style = document.createElement('style'); style.id='skin-style'; document.head.appendChild(style); }
+  style.textContent = `.catfur{fill:${s.color};} .catfur2{fill:${s.dark};}`;
+}
+function checkSkinUnlocks(){
+  let changed = false;
+  for(const s of SKINS){
+    if(gameState.score >= s.unlock && !gameState.skinsUnlocked.includes(s.id)){
+      gameState.skinsUnlocked.push(s.id); changed = true;
+    }
+  }
+  if(changed) saveSkins();
+}
+function renderStats(){
+  const s = gameState.stats || {};
+  const acc = s.totalObservations ? Math.round(100 * s.correctCount / s.totalObservations) : 0;
+  els.statsGrid.innerHTML = `
+    <div class="stat-row"><span class="lbl">OBSERVATIONS</span><span class="v">${s.totalObservations||0}</span></div>
+    <div class="stat-row"><span class="lbl">ACCURACY</span><span class="v">${acc}%</span></div>
+    <div class="stat-row"><span class="lbl">LONGEST STREAK</span><span class="v">${s.longestStreak||0}</span></div>
+    <div class="stat-row"><span class="lbl">BEST SCORE</span><span class="v">${gameState.highScore}</span></div>
+    <div class="stat-row"><span class="lbl">LEVELS REACHED</span><span class="v">${s.levelsReached||1}</span></div>
+    <div class="stat-row"><span class="lbl">GATES USED</span><span class="v">${(s.gatesUsed?(s.gatesUsed.H+s.gatesUsed.X+s.gatesUsed.M+s.gatesUsed.C):0)}</span></div>
+  `;
+  els.achList.innerHTML = Object.entries(ACHIEVEMENTS).map(([id,a])=>{
+    const got = gameState.achievements.has(id);
+    return `<div class="ach-item ${got?'unlocked':'locked'}">${got?'★':'☆'} ${a.name} — ${a.desc}</div>`;
+  }).join('');
+}
+function renderSkins(){
+  els.skinGrid.innerHTML = SKINS.map(s=>{
+    const got = gameState.skinsUnlocked.includes(s.id);
+    return `<div class="skin ${got?'unlocked':''} ${gameState.skin===s.id?'active':''}" data-skin="${s.id}">
+      <div class="preview" style="background:${got?s.color:'#222'};border:1px solid ${got?s.dark:'#333'};"></div>
+      ${s.name}<br>
+      <span style="color:#555;font-size:5px;">${got?'OWNED':s.unlock+' PTS'}</span>
+    </div>`;
+  }).join('');
+  els.skinGrid.querySelectorAll('.skin').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.dataset.skin;
+      if(!gameState.skinsUnlocked.includes(id)) return;
+      gameState.skin = id; saveSkins(); applySkin(); renderSkins(); playClick();
+    });
+  });
+}
+
+// ============ INPUT ============
+function attachInputs(){
+  els.btnAlive.addEventListener('mouseenter', playHover);
+  els.btnDead.addEventListener('mouseenter', playHover);
+  els.btnAsleep.addEventListener('mouseenter', playHover);
+  els.btnAlive.addEventListener('click', ()=>{ playClick(); guess('alive'); });
+  els.btnDead.addEventListener('click', ()=>{ playClick(); guess('dead'); });
+  els.btnAsleep.addEventListener('click', ()=>{ playClick(); guess('asleep'); });
+  els.btnMute.addEventListener('click', toggleMute);
+  els.titleScreen.addEventListener('click', (e)=>{
+    if(e.target.closest('.tiny-btn')) return;
+    if(gameState.phase === 'title'){ ensureAudio(); playClick(); showBriefing(); }
+  });
+  els.btnBegin.addEventListener('click', ()=>{ if(gameState.phase==='briefing'){ playClick(); startGame(false); }});
+  els.btnBegin.addEventListener('mouseenter', playHover);
+  els.btnDaily.addEventListener('click', (e)=>{ e.stopPropagation(); ensureAudio(); playClick(); startGame(true); });
+  els.btnStats.addEventListener('click', (e)=>{ e.stopPropagation(); playClick(); showStats(); });
+  els.btnSkins.addEventListener('click', (e)=>{ e.stopPropagation(); playClick(); showSkins(); });
+  els.btnStatsBack.addEventListener('click', ()=>{ playClick(); showTitle(); });
+  els.btnSkinsBack.addEventListener('click', ()=>{ playClick(); showTitle(); });
+  // Gates
+  ['h','x','m','c'].forEach(k=>{
+    const el = $('gate-'+k);
+    el.addEventListener('click', ()=>{ if(el.classList.contains('unlocked')) activateGate(k.toUpperCase()); });
+  });
+  // Stake chips
+  document.querySelectorAll('.chip').forEach(b=>{
+    b.addEventListener('click', ()=>{ if(gameState.level<2) return; setStake(parseInt(b.dataset.stake,10)); playClick(); });
+  });
+  // Flip btn
+  els.flipBtn.addEventListener('click', applyFlip);
+  // Level splash
+  els.lvlGo.addEventListener('click', ()=>{ playClick(); dismissLevelSplash(); });
+  // MW
+  els.mwSubmit.addEventListener('click', ()=>{ playClick(); commitManyWorlds(); });
+  // Keyboard
+  document.addEventListener('keydown', (e)=>{
+    const k = e.key.toLowerCase();
+    if(gameState.phase === 'title'){
+      if(k===' '||k==='enter'){ e.preventDefault(); ensureAudio(); playClick(); showBriefing(); } return;
+    }
+    if(gameState.phase === 'briefing'){
+      if(k===' '||k==='enter'){ e.preventDefault(); playClick(); startGame(false); } return;
+    }
+    if(gameState.phase === 'levelsplash'){
+      if(k===' '||k==='enter'){ e.preventDefault(); playClick(); dismissLevelSplash(); } return;
+    }
+    if(k==='m'){ toggleMute(); return; }
+    if(gameState.phase === 'superposition'){
+      if(k==='a'){ playClick(); guess('alive'); }
+      else if(k==='d'){ playClick(); guess('dead'); }
+      else if(k==='s' && gameState.currentRoundType==='qutrit'){ playClick(); guess('asleep'); }
+      else if(k==='1'||k==='2'||k==='3'){ if(gameState.level>=2) setStake(parseInt(k,10)); }
+      else if(k==='h'){ activateGate('H'); }
+      else if(k==='x'){ activateGate('X'); }
+      else if(k==='p'){ activateGate('M'); }
+      else if(k==='c'){ activateGate('C'); }
+    }
+    if(gameState.phase === 'flip-window' && k==='x'){ applyFlip(); }
+  });
+}
+function guess(g){
+  if(gameState.currentRoundType === 'boss-zeno'){ zenoGuess(g); return; }
+  observeBox(g);
+}
+function toggleMute(){
+  gameState.muted = !gameState.muted;
+  els.btnMute.textContent = gameState.muted ? '♪ OFF' : '♪ ON';
+  applyMute();
+}
+
+// ============ BACKGROUND PARTICLES ============
+function spawnBgDot(){
+  if(!els.bgParticles) return;
+  const d = document.createElement('div');
+  const variants = ['','m','y'];
+  d.className = 'bg-dot ' + variants[Math.floor(Math.random()*variants.length)];
+  d.style.left = Math.random()*100 + '%'; d.style.bottom = '-10px';
+  const dur = 6 + Math.random()*8;
+  d.style.animationDuration = dur+'s';
+  d.style.setProperty('--drift', (Math.random()*60-30)+'px');
+  d.style.opacity = (0.2 + Math.random()*0.4).toString();
+  els.bgParticles.appendChild(d);
+  setTimeout(()=>d.remove(), dur*1000+200);
+}
+setInterval(spawnBgDot, 350);
+
+// ============ BOOT ============
+window.addEventListener('load', ()=>{
+  cacheEls();
+  loadHighScore(); loadStats(); loadAchievements(); loadSkins();
+  attachInputs();
+  showTitle();
+  for(let i=0;i<8;i++) setTimeout(spawnBgDot, i*120);
+});
+</script>
+</body>
+</html>
